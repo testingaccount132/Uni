@@ -276,6 +276,7 @@ function compositor.add_window(win)
 end
 
 function compositor.remove_window(win)
+  if win._on_close then pcall(win._on_close) end
   for i, w in ipairs(compositor._windows) do
     if w == win then
       table.remove(compositor._windows, i)

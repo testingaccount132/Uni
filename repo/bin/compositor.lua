@@ -177,12 +177,49 @@ local function create_terminal_window()
   local th = math.min(18, H - 7)
   local win = libgui.create_window({ x = px, y = py, w = tw, h = th, title = "Terminal" })
 
-  local output_lines = {
-    "\27[36mUniOS Terminal\27[0m",
-    "Type commands. Built-in: help, uname, whoami, pwd, date, mem, ls, cat, clear, exit",
-    "",
-  }
-  local term_cwd = "/root"
+  -- Create PTY pair and spawn shell
+  local master, slave
+  local shell_pid = nil
+  pcall(function()
+    master, slave = sys("pty_create")
+    if master and slave then
+      -- Build a stdin/stdout fd wrapper for the shell process
+      local stdin_fd = {
+        _dev = slave,
+        read  = function(self, n) return slave.read(n) end,
+        write = function(self, d) return slave.write(d) end,
+        close = function(self) end,
+      }
+      local stdout_fd = {
+        _dev = slave,
+        read  = function(self, n) return slave.read(n) end,
+        write = function(self, d) return slave.write(d) end,
+        close = function(self) end,
+      }
+      shell_pid = sys("spawn", "/bin/sh.lua", "sh", {
+        cwd = "/root",
+        env = {
+          PATH = "/bin:/sbin:/usr/bin:/tools",
+          HOME = "/root",
+          SHELL = "/bin/sh",
+          TERM = "uni-pty",
+          USER = "root",
+        },
+        stdin = stdin_fd,
+        stdout = stdout_fd,
+        stderr = stdout_fd,
+      })
+    end
+  end)
+
+  local output_lines = {}
+  local output_buf = ""
+
+  if not master then
+    output_lines[1] = "PTY not available. Using simple terminal."
+    output_lines[2] = "Commands: help, uname, whoami, pwd, date, mem, ls, cat, cd, clear, exit"
+    output_lines[3] = ""
+  end
 
   local output_list = libgui.List({
     x = 1, y = 1,
@@ -197,101 +234,118 @@ local function create_terminal_window()
     placeholder = "$ ",
   })
 
+  -- Poll PTY master for output and display it
+  win._poll = function()
+    if not master then return end
+    local data = master.read(4096)
+    if data then
+      output_buf = output_buf .. data
+      -- Split into lines
+      while true do
+        local nl = output_buf:find("\n")
+        if not nl then break end
+        local line = output_buf:sub(1, nl - 1)
+        output_buf = output_buf:sub(nl + 1)
+        -- Strip ANSI escapes for display
+        local clean = line:gsub("\27%[[%d;]*%a", "")
+        output_lines[#output_lines + 1] = clean
+      end
+      output_list.items = output_lines
+      output_list.selected = #output_lines
+    end
+  end
+
+  -- Cleanup on window close
+  win._on_close = function()
+    if shell_pid then
+      pcall(function() sys("kill", shell_pid, "SIGTERM") end)
+    end
+    if master then
+      pcall(function() master.close() end)
+    end
+  end
+
+  local term_cwd = "/root"
+
   local orig_key = input_field.key
   input_field.key = function(ch, code)
     if ch == "\n" then
       local cmd_str = input_field.value or ""
       input_field.value = ""
       input_field.cursor = 1
-      output_lines[#output_lines + 1] = "$ " .. cmd_str
 
-      if cmd_str == "" then
-        output_lines[#output_lines + 1] = ""
+      if master then
+        -- Send to PTY
+        master.write(cmd_str .. "\n")
+      else
+        -- Fallback simple terminal
+        output_lines[#output_lines + 1] = "$ " .. cmd_str
+
+        if cmd_str == "" then
+          output_lines[#output_lines + 1] = ""
+        elseif cmd_str == "exit" or cmd_str == "close" then
+          comp.remove_window(win)
+          return
+        else
+          local parts = {}
+          for w in cmd_str:gmatch("%S+") do parts[#parts + 1] = w end
+          local cmd = parts[1]
+
+          local result = nil
+          if cmd == "uname" then
+            result = kernel.VERSION .. " " .. (kernel.RELEASE or "")
+          elseif cmd == "whoami" then
+            result = "root"
+          elseif cmd == "pwd" then
+            result = term_cwd
+          elseif cmd == "date" then
+            result = string.format("uptime: %.1fs", computer.uptime())
+          elseif cmd == "mem" or cmd == "free" then
+            local total = computer.totalMemory()
+            local free = computer.freeMemory()
+            result = string.format("Total: %dKB  Used: %dKB  Free: %dKB",
+              math.floor(total / 1024), math.floor((total - free) / 1024), math.floor(free / 1024))
+          elseif cmd == "ls" then
+            local dir = parts[2] or term_cwd
+            if dir:sub(1, 1) ~= "/" then dir = term_cwd .. "/" .. dir end
+            local ls = vfs.list(dir)
+            if ls then
+              local entries = {}
+              for _, f in ipairs(ls) do
+                entries[#entries + 1] = vfs.isdir(dir .. "/" .. f) and (f .. "/") or f
+              end
+              table.sort(entries)
+              result = table.concat(entries, "  ")
+            else
+              result = "ls: cannot access '" .. dir .. "'"
+            end
+          elseif cmd == "cat" then
+            if not parts[2] then result = "cat: missing file" else
+              local file = parts[2]
+              if file:sub(1, 1) ~= "/" then file = term_cwd .. "/" .. file end
+              local data = vfs.readfile(file)
+              result = data or ("cat: " .. file .. ": no such file")
+            end
+          elseif cmd == "cd" then
+            local dir = parts[2] or "/root"
+            if dir:sub(1, 1) ~= "/" then dir = term_cwd .. "/" .. dir end
+            if vfs.isdir(dir) then term_cwd = dir else result = "cd: not a directory" end
+          elseif cmd == "clear" then
+            for k in pairs(output_lines) do output_lines[k] = nil end
+            output_lines[1] = ""
+          elseif cmd == "help" then
+            result = "help uname whoami pwd date mem ls cat cd clear exit"
+          else
+            result = cmd .. ": command not found"
+          end
+
+          if result then output_lines[#output_lines + 1] = tostring(result) end
+          output_lines[#output_lines + 1] = ""
+        end
+
         output_list.items = output_lines
         output_list.selected = #output_lines
-        return
       end
-
-      if cmd_str == "exit" or cmd_str == "close" then
-        comp.remove_window(win)
-        return
-      end
-
-      local parts = {}
-      for w in cmd_str:gmatch("%S+") do parts[#parts + 1] = w end
-      local cmd = parts[1]
-
-      local result = nil
-      if cmd == "uname" then
-        result = kernel.VERSION .. " " .. (kernel.RELEASE or "")
-      elseif cmd == "whoami" then
-        result = "root"
-      elseif cmd == "pwd" then
-        result = term_cwd
-      elseif cmd == "date" then
-        result = string.format("uptime: %.1fs", computer.uptime())
-      elseif cmd == "mem" or cmd == "free" then
-        local total = computer.totalMemory()
-        local free = computer.freeMemory()
-        result = string.format("Total: %dKB  Used: %dKB  Free: %dKB",
-          math.floor(total / 1024),
-          math.floor((total - free) / 1024),
-          math.floor(free / 1024))
-      elseif cmd == "ls" then
-        local dir = parts[2] or term_cwd
-        if dir:sub(1, 1) ~= "/" then dir = term_cwd .. "/" .. dir end
-        local ls = vfs.list(dir)
-        if ls then
-          local entries = {}
-          for _, f in ipairs(ls) do
-            local is_dir = vfs.isdir(dir .. "/" .. f)
-            entries[#entries + 1] = is_dir and (f .. "/") or f
-          end
-          table.sort(entries)
-          result = table.concat(entries, "  ")
-        else
-          result = "ls: cannot access '" .. dir .. "'"
-        end
-      elseif cmd == "cat" then
-        local file = parts[2]
-        if not file then
-          result = "cat: missing file"
-        else
-          if file:sub(1, 1) ~= "/" then file = term_cwd .. "/" .. file end
-          local data = vfs.readfile(file)
-          if data then
-            for line in (data .. "\n"):gmatch("(.-)\n") do
-              output_lines[#output_lines + 1] = line
-            end
-          else
-            result = "cat: " .. file .. ": no such file"
-          end
-        end
-      elseif cmd == "cd" then
-        local dir = parts[2] or "/root"
-        if dir:sub(1, 1) ~= "/" then dir = term_cwd .. "/" .. dir end
-        if vfs.isdir(dir) then
-          term_cwd = dir
-          result = nil
-        else
-          result = "cd: " .. dir .. ": not a directory"
-        end
-      elseif cmd == "clear" then
-        for k in pairs(output_lines) do output_lines[k] = nil end
-        output_lines[1] = ""
-        result = nil
-      elseif cmd == "help" then
-        result = "help uname whoami pwd date mem ls cat cd clear exit"
-      else
-        result = cmd .. ": not a GUI terminal command (use full shell)"
-      end
-
-      if result then
-        output_lines[#output_lines + 1] = tostring(result)
-      end
-      output_lines[#output_lines + 1] = ""
-      output_list.items = output_lines
-      output_list.selected = #output_lines
     else
       if orig_key then orig_key(ch, code) end
     end
@@ -489,6 +543,13 @@ local function main()
         end
       else
         comp.handle_event(ev)
+      end
+    end
+
+    -- Poll PTY output from terminal windows
+    for _, win in ipairs(comp._windows) do
+      if win._poll then
+        pcall(win._poll)
       end
     end
 

@@ -11,6 +11,58 @@ local vfs = kernel.vfs
 local lp  = kernel.require("lib.libpath")
 local lc  = kernel.require("lib.libc")
 
+-- ── I/O abstraction (PTY-aware) ─────────────────────────────────────────────
+-- If the process has a PTY slave attached as stdout, write there instead of GPU.
+-- This allows the shell to work in both console mode and inside compositor terminals.
+local _io = {}
+do
+  local pid = sys("getpid")
+  local proc = kernel.process.get(pid)
+  local has_pty = proc and proc.fds[1] and proc.fds[1].write
+  if has_pty then
+    _io.write = function(s) proc.fds[1]:write(tostring(s)) end
+    _io.read_char = function()
+      while true do
+        if proc.fds[0] and proc.fds[0].read then
+          local ch = proc.fds[0]:read(1)
+          if ch then return ch end
+        end
+        coroutine.yield()
+      end
+    end
+    _io.readline = function(prompt_str)
+      if prompt_str then _io.write(prompt_str) end
+      local line = {}
+      while true do
+        local ch = _io.read_char()
+        if ch == "\n" or ch == "\r" then
+          _io.write("\n")
+          return table.concat(line)
+        elseif ch == "\8" or ch == "\127" then
+          if #line > 0 then
+            table.remove(line)
+            _io.write("\8 \8")
+          end
+        elseif ch == "\3" then
+          _io.write("^C\n")
+          return ""
+        else
+          line[#line + 1] = ch
+          _io.write(ch)
+        end
+      end
+    end
+    _io.is_pty = true
+  else
+    _io.write = function(s) gpu.write(tostring(s)) end
+    _io.read_char = function() return kbd.getchar() end
+    _io.readline = function(prompt_str)
+      return kbd.readline(prompt_str)
+    end
+    _io.is_pty = false
+  end
+end
+
 -- ── Shell state ───────────────────────────────────────────────────────────────
 
 local _env     = {}  -- copy of process env
@@ -35,10 +87,10 @@ local PATH_LIST = lp.split_path(_env.PATH or "/bin:/usr/bin")
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
-local function sh_write(s)  gpu.write(tostring(s)) end
-local function sh_writeln(s) gpu.write(tostring(s) .. "\n") end
+local function sh_write(s)  _io.write(tostring(s)) end
+local function sh_writeln(s) _io.write(tostring(s) .. "\n") end
 local function sh_err(s)
-  gpu.write("\27[31msh: " .. tostring(s) .. "\27[0m\n")
+  _io.write("\27[31msh: " .. tostring(s) .. "\27[0m\n")
 end
 
 local function expand_var(name)
@@ -492,30 +544,30 @@ local function readline_with_history()
   local hist_idx = #_history + 1
   local saved_line = ""
 
-  gpu.write(prompt())
+  _io.write(prompt())
   kernel.signal.set_fg(_pid)
 
   while true do
-    local ch = kbd.getchar()
+    local ch = _io.read_char()
 
     if ch == "\n" or ch == "\r" then
-      gpu.write("\n")
+      _io.write("\n")
       break
 
     elseif ch == "\8" or ch == "\127" then
       if #line > 0 then
         table.remove(line)
-        gpu.write("\8 \8")
+        _io.write("\8 \8")
       end
 
     elseif ch == "\3" then   -- Ctrl-C
-      gpu.write("^C\n")
+      _io.write("^C\n")
       line = {}
       break
 
     elseif ch == "\4" then   -- Ctrl-D
       if #line == 0 then
-        gpu.write("exit\n")
+        _io.write("exit\n")
         _running = false
         sys("exit", 0)
       end
@@ -525,7 +577,6 @@ local function readline_with_history()
       local word    = partial:match("[^%s]+$") or ""
       local completions = {}
       if word:sub(1,1) == "/" or word:sub(1,1) == "." then
-        -- File completion
         local dir  = lp.dirname(lp.resolve(word, _cwd))
         local base = lp.basename(word)
         local ls   = vfs.list(dir) or {}
@@ -533,7 +584,6 @@ local function readline_with_history()
           if f:sub(1, #base) == base then completions[#completions+1] = f end
         end
       else
-        -- Command completion
         for bi in pairs(builtins) do
           if bi:sub(1, #word) == word then completions[#completions+1] = bi end
         end
@@ -547,38 +597,37 @@ local function readline_with_history()
         local completion = completions[1]:gsub("%.lua$", "")
         local suffix = completion:sub(#word + 1)
         for c in suffix:gmatch(".") do line[#line+1] = c end
-        gpu.write(suffix)
+        _io.write(suffix)
       elseif #completions > 1 then
         table.sort(completions)
-        gpu.write("\n" .. table.concat(completions, "  ") .. "\n")
-        gpu.write(prompt() .. table.concat(line))
+        _io.write("\n" .. table.concat(completions, "  ") .. "\n")
+        _io.write(prompt() .. table.concat(line))
       end
 
-    elseif ch == "up" then   -- History up
+    elseif ch == "up" then
       if hist_idx > 1 then
         if hist_idx == #_history + 1 then saved_line = table.concat(line) end
         hist_idx = hist_idx - 1
         local hl = _history[hist_idx] or ""
-        -- Erase current line
-        gpu.write(string.rep("\8 \8", #line))
+        _io.write(string.rep("\8 \8", #line))
         line = {}
         for c in hl:gmatch(".") do line[#line+1] = c end
-        gpu.write(hl)
+        _io.write(hl)
       end
 
-    elseif ch == "down" then   -- History down
+    elseif ch == "down" then
       if hist_idx <= #_history then
         hist_idx = hist_idx + 1
         local hl = hist_idx > #_history and saved_line or (_history[hist_idx] or "")
-        gpu.write(string.rep("\8 \8", #line))
+        _io.write(string.rep("\8 \8", #line))
         line = {}
         for c in hl:gmatch(".") do line[#line+1] = c end
-        gpu.write(hl)
+        _io.write(hl)
       end
 
     elseif type(ch) == "string" and #ch == 1 then
       line[#line+1] = ch
-      gpu.write(ch)
+      _io.write(ch)
     end
   end
 
@@ -599,18 +648,20 @@ pcall(function()
   if rc then sh_exec_string(rc) end
 end)
 
--- Clear boot log fully and print banner
-do
-  local raw = gpu.raw and gpu.raw()
-  if raw then
-    local rw, rh = raw.getResolution()
-    raw.setBackground(0x000000)
-    raw.setForeground(0xFFFFFF)
-    raw.fill(1, 1, rw, rh, " ")
+-- Clear screen and print banner
+if not _io.is_pty then
+  do
+    local raw = gpu.raw and gpu.raw()
+    if raw then
+      local rw, rh = raw.getResolution()
+      raw.setBackground(0x000000)
+      raw.setForeground(0xFFFFFF)
+      raw.fill(1, 1, rw, rh, " ")
+    end
+    gpu.clear()
   end
-  gpu.clear()
 end
-gpu.write("\27[1;36m" .. kernel.VERSION .. "\27[0m  |  type 'help' for builtins\n\n")
+_io.write("\27[1;36m" .. kernel.VERSION .. "\27[0m  |  type 'help' for builtins\n\n")
 
 while _running do
   local ok, line = pcall(readline_with_history)
