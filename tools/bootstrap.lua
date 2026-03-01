@@ -21,6 +21,7 @@ local FILES = {
   "kernel/signal.lua","kernel/syscall.lua",
   "fs/vfs.lua","fs/devfs.lua","fs/tmpfs.lua",
   "drivers/gpu.lua","drivers/keyboard.lua","drivers/disk.lua",
+  "drivers/tty.lua","drivers/pty.lua",
   "lib/libc.lua","lib/libio.lua","lib/libpath.lua","lib/libterm.lua","lib/pkg.lua",
   "bin/sh.lua","bin/ls.lua","bin/cat.lua","bin/cp.lua","bin/mv.lua","bin/rm.lua",
   "bin/mkdir.lua","bin/echo.lua","bin/pwd.lua","bin/uname.lua","bin/ps.lua",

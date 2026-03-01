@@ -190,6 +190,8 @@ k.drivers = {}
 k.drivers.gpu      = load_subsystem("driver:gpu",      "drivers.gpu",      function(m) m.init() end)
 k.drivers.keyboard = load_subsystem("driver:keyboard", "drivers.keyboard", function(m) m.init() end)
 k.drivers.disk     = load_subsystem("driver:disk",     "drivers.disk",     function(m) m.init() end)
+k.drivers.tty      = load_subsystem("driver:tty",      "drivers.tty",      function(m) m.init() end)
+k.drivers.pty      = load_subsystem("driver:pty",      "drivers.pty",      function(m) m.init() end)
 
 -- GPU is now managed by the driver; clear the early cache so driver owns it
 _gpu_cache = false

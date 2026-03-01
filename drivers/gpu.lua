@@ -46,12 +46,6 @@ function gpu_drv.init()
   -- Start cursor below any existing content (row 1 = safe default).
   _cx, _cy = 1, 1
 
-  -- Register as /dev/tty0
-  kernel.devfs.register("tty0", {
-    read  = function(n) return kernel.drivers.keyboard.read(n) end,
-    write = function(d) gpu_drv.write(d); return true end,
-  })
-
   kernel.info("gpu: " .. _w .. "x" .. _h .. " initialised")
 end
 

@@ -165,6 +165,62 @@ function syscall.init()
     return kernel.drivers.keyboard.readline()
   end)
 
+  -- ── Spawn (with TTY/PTY support) ───────────────────────────────────────────
+  def("spawn", function(path, name, opts)
+    opts = opts or {}
+    local pid = kernel.scheduler.current_pid()
+    local proc = kernel.process.get(pid)
+    local cwd = (proc and proc.cwd) or "/"
+    local abs = kernel.vfs.resolve(path, cwd)
+    local src = kernel.vfs.readfile(abs)
+    if not src then return nil, "file not found: " .. abs end
+    local child = kernel.process.spawn(src, name or abs:match("[^/]+$") or "?", {
+      ppid = pid,
+      uid  = opts.uid or (proc and proc.uid) or 0,
+      gid  = opts.gid or (proc and proc.gid) or 0,
+      cwd  = opts.cwd or cwd,
+      env  = opts.env or (proc and proc.env) or {},
+      stdin  = opts.stdin,
+      stdout = opts.stdout,
+      stderr = opts.stderr,
+    })
+    return child.pid
+  end)
+
+  -- ── Exec (replace current process) ─────────────────────────────────────────
+  def("exec", function(path, args)
+    local pid = kernel.scheduler.current_pid()
+    local proc = kernel.process.get(pid)
+    if not proc then return false, "no process" end
+    local abs = kernel.vfs.resolve(path, proc.cwd)
+    local src = kernel.vfs.readfile(abs)
+    if not src then return false, "file not found: " .. abs end
+    local fn, err = load(src, "=" .. abs, "t", _G)
+    if not fn then return false, err end
+    _G.arg = args or {}
+    local ok, result = pcall(fn)
+    if not ok then return false, result end
+    return true, result
+  end)
+
+  -- ── TTY/PTY ────────────────────────────────────────────────────────────────
+  def("tty_create", function(id, opts)
+    return kernel.drivers.tty.create(id, opts)
+  end)
+
+  def("tty_switch", function(id)
+    return kernel.drivers.tty.switch(id)
+  end)
+
+  def("tty_list", function()
+    return kernel.drivers.tty.list()
+  end)
+
+  def("pty_create", function(opts)
+    local master, slave = kernel.drivers.pty.create(opts)
+    return master, slave
+  end)
+
   kernel.info("syscall: " .. (function()
     local n = 0; for _ in pairs(_table) do n = n + 1 end; return n
   end)() .. " syscalls registered")
