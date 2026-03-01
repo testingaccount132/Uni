@@ -482,7 +482,7 @@ local key = wait_key()
 if key == "q" or key == "Q" then
   set_status("Cancelled.", C.warn)
   set_progress(0, "  Cancelled  ")
-  computer.pullSignal(1)
+  os.sleep(1)
   -- restore terminal
   if gpu then
     gpu.setBackground(0x000000)

@@ -200,6 +200,24 @@ k.scheduler = load_subsystem("scheduler", "kernel.scheduler", function(m) m.init
 k.signal    = load_subsystem("signal",    "kernel.signal",    function(m) m.init() end)
 k.syscall   = load_subsystem("syscall",   "kernel.syscall",   function(m) m.init() end)
 
+-- 5b. Populate os.* for compatibility (OpenOS scripts expect os.sleep etc.)
+_G.os = _G.os or {}
+function os.sleep(n)
+  computer.pullSignal(n or 0)
+end
+function os.clock()
+  return computer.uptime()
+end
+function os.time()
+  return math.floor(computer.uptime())
+end
+function os.exit(code)
+  error({_exit = code or 0})
+end
+function os.tmpname()
+  return "/tmp/.lua_" .. tostring(math.floor(computer.uptime() * 1000))
+end
+
 -- 6. Standard libraries (non-fatal if missing)
 for _, lib in ipairs({ "lib.libc", "lib.libio", "lib.libpath", "lib.libterm", "lib.pkg" }) do
   local ok2, err2 = pcall(k.require, lib)
