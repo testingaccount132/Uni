@@ -1,0 +1,60 @@
+-- /etc/rc – System initialisation script
+-- Runs as Lua inside the kernel environment after all subsystems are up.
+-- Failures here are non-fatal (logged but don't halt boot).
+
+local function rc_log(msg) kernel.info("rc: " .. msg) end
+local function rc_warn(msg) kernel.warn("rc: " .. msg) end
+
+local function ensure_dir(path)
+  if not kernel.vfs.exists(path) then
+    local ok, err = kernel.vfs.mkdir(path)
+    if ok then rc_log("mkdir " .. path)
+    else rc_warn("mkdir " .. path .. ": " .. tostring(err)) end
+  end
+end
+
+local function ensure_file(path, content)
+  if not kernel.vfs.exists(path) then
+    local ok, err = kernel.vfs.writefile(path, content)
+    if ok then rc_log("created " .. path)
+    else rc_warn("create " .. path .. ": " .. tostring(err)) end
+  end
+end
+
+-- ── Standard directory tree ───────────────────────────────────────────────────
+
+local dirs = {
+  "/bin", "/sbin", "/lib", "/etc", "/tmp",
+  "/var", "/var/log", "/var/run",
+  "/usr", "/usr/bin", "/usr/lib", "/usr/share",
+  "/home", "/root", "/proc",
+  "/tools",
+}
+for _, d in ipairs(dirs) do ensure_dir(d) end
+
+-- ── Default config files ──────────────────────────────────────────────────────
+
+ensure_file("/etc/hostname", "uni\n")
+ensure_file("/etc/passwd",   "root:x:0:0:root:/root:/bin/sh\nnobody:x:65534:65534:nobody:/:/dev/null\n")
+ensure_file("/etc/profile",  "export PATH=/bin:/usr/bin:/tools\nexport HOME=/root\n")
+ensure_file("/root/.shrc",   "# UniOS shell rc\nalias ll='ls -la'\nalias ..='cd ..'\n")
+
+-- ── /proc pseudo-entries ──────────────────────────────────────────────────────
+-- Write a few static /proc files for compatibility
+
+pcall(function()
+  kernel.vfs.writefile("/proc/version",
+    kernel.VERSION .. " (" .. (kernel.CODENAME or "") .. ") #1\n")
+  kernel.vfs.writefile("/proc/uptime",
+    string.format("%.2f 0.00\n", computer.uptime()))
+  local mem_total = computer.totalMemory()
+  local mem_free  = computer.freeMemory()
+  kernel.vfs.writefile("/proc/meminfo", string.format(
+    "MemTotal: %8d kB\nMemFree:  %8d kB\nMemUsed:  %8d kB\n",
+    math.floor(mem_total/1024),
+    math.floor(mem_free/1024),
+    math.floor((mem_total-mem_free)/1024)
+  ))
+end)
+
+rc_log("done")

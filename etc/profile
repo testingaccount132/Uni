@@ -1,0 +1,13 @@
+# /etc/profile – system-wide shell profile
+
+export PATH=/bin:/usr/bin
+export HOME=/root
+export TERM=uni-vt
+export PS1='\u@\h:\w\$ '
+
+alias ll='ls -la'
+alias la='ls -a'
+alias l='ls'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias grep='grep --color'

@@ -1,0 +1,19 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Lua compiled files
+*.luac
+ocelot.jar
+ocelot-*.jar
+
+# Logs / temp
+*.log
+*.bak
+/tmp/

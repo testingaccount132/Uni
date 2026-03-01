@@ -1,0 +1,59 @@
+name: Auto-minify EEPROM files
+
+# Runs on every push to main that touches bios.lua or installer_eeprom.lua.
+# Generates .min.lua versions, commits them back to the repo automatically.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "eeprom/bios.lua"
+      - "installer/installer_eeprom.lua"
+      - "scripts/minify.js"
+
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  minify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Minify eeprom/bios.lua
+        run: |
+          echo "── Minifying bios.lua ──"
+          node scripts/minify.js eeprom/bios.lua eeprom/bios.min.lua
+
+      - name: Minify installer/installer_eeprom.lua
+        run: |
+          echo "── Minifying installer_eeprom.lua ──"
+          node scripts/minify.js installer/installer_eeprom.lua installer/installer_eeprom.min.lua
+
+      - name: Check if .min.lua files changed
+        id: diff
+        run: |
+          git diff --quiet eeprom/bios.min.lua installer/installer_eeprom.min.lua \
+            && echo "changed=false" >> $GITHUB_OUTPUT \
+            || echo "changed=true"  >> $GITHUB_OUTPUT
+
+      - name: Commit updated .min.lua files
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add eeprom/bios.min.lua installer/installer_eeprom.min.lua
+          git commit -m "chore: auto-minify EEPROM files [skip ci]"
+          git push
