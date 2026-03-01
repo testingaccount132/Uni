@@ -4,7 +4,7 @@ local env = sys("getenv")
 local path_list = lp.split_path((env and env.PATH) or "/bin:/usr/bin")
 
 local found = false
-for i = 2, #arg do
+for i = 1, #arg do
   local p = lp.which(arg[i], path_list)
   if p then
     print(p); found = true

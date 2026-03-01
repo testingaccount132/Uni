@@ -17,7 +17,7 @@ local long = false
 local all  = false
 local paths = {}
 
-for i = 2, #arg do
+for i = 1, #arg do
   local a = arg[i]
   if a:sub(1,1) == "-" then
     for c in a:sub(2):gmatch(".") do

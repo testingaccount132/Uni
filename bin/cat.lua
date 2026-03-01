@@ -8,7 +8,7 @@ local cwd = sys("getcwd")
 local show_lines = false
 local paths = {}
 
-for i = 2, #arg do
+for i = 1, #arg do
   if arg[i] == "-n" then show_lines = true
   elseif arg[i] == "--help" then
     print("Usage: cat [-n] [file...]"); return 0

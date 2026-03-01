@@ -8,7 +8,7 @@ local recursive = false
 local srcs = {}
 local dst
 
-for i = 2, #arg do
+for i = 1, #arg do
   if arg[i] == "-r" or arg[i] == "-R" then recursive = true
   elseif arg[i] == "--help" then print("Usage: cp [-r] src... dst"); return 0
   else srcs[#srcs+1] = arg[i] end

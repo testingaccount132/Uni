@@ -1,6 +1,6 @@
 -- env – display or modify the environment
 
-if arg[2] == nil then
+if arg[1] == nil then
   local e = sys("getenv")
   if type(e) == "table" then
     local keys = {}
@@ -17,7 +17,7 @@ end
 -- (simplified: just set vars, then exec)
 local extra = {}
 local cmd_start = nil
-for i = 2, #arg do
+for i = 1, #arg do
   local k, v = arg[i]:match("^([%w_]+)=(.*)$")
   if k then
     extra[k] = v

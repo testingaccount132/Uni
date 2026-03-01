@@ -8,7 +8,7 @@ local recursive = false
 local force     = false
 local paths = {}
 
-for i = 2, #arg do
+for i = 1, #arg do
   if arg[i] == "-r" or arg[i] == "-R" then recursive = true
   elseif arg[i] == "-f" then force = true
   elseif arg[i] == "-rf" or arg[i] == "-fr" then recursive = true; force = true

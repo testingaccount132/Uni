@@ -3,7 +3,7 @@
 local all = false
 local flags = { s=false, n=false, r=false, v=false, m=false }
 
-for i = 2, #arg do
+for i = 1, #arg do
   if arg[i] == "-a" then all = true
   elseif arg[i]:sub(1,1) == "-" then
     for c in arg[i]:sub(2):gmatch(".") do

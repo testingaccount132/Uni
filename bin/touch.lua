@@ -5,7 +5,7 @@ local lp  = kernel.require("lib.libpath")
 local cwd = sys("getcwd")
 
 local paths = {}
-for i = 2, #arg do paths[#paths+1] = arg[i] end
+for i = 1, #arg do paths[#paths+1] = arg[i] end
 if #paths == 0 then print("touch: missing operand"); return 1 end
 
 local exit_code = 0

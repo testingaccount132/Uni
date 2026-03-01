@@ -575,15 +575,26 @@ local function readline_with_history()
     elseif ch == "\9" then   -- Tab completion
       local partial = table.concat(line)
       local word    = partial:match("[^%s]+$") or ""
+      local is_first_word = not partial:match("%S+%s")
       local completions = {}
-      if word:sub(1,1) == "/" or word:sub(1,1) == "." then
-        local dir  = lp.dirname(lp.resolve(word, _cwd))
-        local base = lp.basename(word)
-        local ls   = vfs.list(dir) or {}
+
+      local function do_file_completion()
+        local resolve_ok, resolved = pcall(lp.resolve, word, _cwd)
+        if not resolve_ok then resolved = _cwd .. "/" .. word end
+        local dir_ok, dir = pcall(lp.dirname, resolved)
+        if not dir_ok then dir = _cwd end
+        local base_ok, base = pcall(lp.basename, word ~= "" and word or ".")
+        if not base_ok then base = word end
+        if word == "" or word:sub(-1) == "/" then base = "" end
+        local ls = vfs.list(dir) or {}
         for _, f in ipairs(ls) do
-          if f:sub(1, #base) == base then completions[#completions+1] = f end
+          if base == "" or f:sub(1, #base) == base then
+            completions[#completions + 1] = f
+          end
         end
-      else
+      end
+
+      if is_first_word then
         for bi in pairs(builtins) do
           if bi:sub(1, #word) == word then completions[#completions+1] = bi end
         end
@@ -592,12 +603,18 @@ local function readline_with_history()
           local name = f:gsub("%.lua$", "")
           if name:sub(1, #word) == word then completions[#completions+1] = name end
         end
+      else
+        pcall(do_file_completion)
       end
+
       if #completions == 1 then
-        local completion = completions[1]:gsub("%.lua$", "")
-        local suffix = completion:sub(#word + 1)
-        for c in suffix:gmatch(".") do line[#line+1] = c end
-        _io.write(suffix)
+        local completion = completions[1]
+        if is_first_word then completion = completion:gsub("%.lua$", "") end
+        local suffix = completion:sub(#(word:match("[^/]+$") or word) + 1)
+        if suffix ~= "" then
+          for c in suffix:gmatch(".") do line[#line+1] = c end
+          _io.write(suffix)
+        end
       elseif #completions > 1 then
         table.sort(completions)
         _io.write("\n" .. table.concat(completions, "  ") .. "\n")

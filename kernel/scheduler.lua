@@ -7,6 +7,8 @@ local scheduler = {}
 
 local _running = false
 local _current_pid = nil
+local _last_blink = nil
+local _cursor_on = false
 
 function scheduler.init()
   _running = false
@@ -60,6 +62,18 @@ function scheduler.run()
         end
 
         _current_pid = nil
+      end
+    end
+
+    -- Cursor blink
+    if kernel.drivers and kernel.drivers.gpu then
+      local now = computer.uptime()
+      if not _last_blink then _last_blink = now end
+      if now - _last_blink > 0.5 then
+        _last_blink = now
+        local gpu_d = kernel.drivers.gpu
+        if _cursor_on then gpu_d.hide_cursor() else gpu_d.show_cursor() end
+        _cursor_on = not _cursor_on
       end
     end
 

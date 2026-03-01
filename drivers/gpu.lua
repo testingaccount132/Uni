@@ -206,6 +206,44 @@ function gpu_drv.get_cursor()
   return _cx, _cy
 end
 
+-- ── Cursor rendering ────────────────────────────────────────────────────────
+local _cursor_visible = true
+local _cursor_blink   = true
+local _cursor_shown   = false
+local _cursor_char    = nil
+local _cursor_fg      = nil
+local _cursor_bg      = nil
+
+function gpu_drv.show_cursor()
+  if not _gpu or not _cursor_blink then return end
+  if _cursor_shown then return end
+  -- Save what's under the cursor and draw the cursor block
+  _cursor_char = _gpu.get(_cx, _cy)
+  _cursor_fg, _cursor_bg = _fg, _bg
+  _gpu.setForeground(0x000000)
+  _gpu.setBackground(0xFFFFFF)
+  _gpu.set(_cx, _cy, _cursor_char or " ")
+  _gpu.setForeground(_fg)
+  _gpu.setBackground(_bg)
+  _cursor_shown = true
+end
+
+function gpu_drv.hide_cursor()
+  if not _gpu or not _cursor_shown then return end
+  -- Restore what was under the cursor
+  _gpu.setForeground(_cursor_fg or _fg)
+  _gpu.setBackground(_cursor_bg or _bg)
+  _gpu.set(_cx, _cy, _cursor_char or " ")
+  _gpu.setForeground(_fg)
+  _gpu.setBackground(_bg)
+  _cursor_shown = false
+end
+
+function gpu_drv.set_cursor_blink(enabled)
+  _cursor_blink = enabled
+  if not enabled then gpu_drv.hide_cursor() end
+end
+
 function gpu_drv.clear()
   if not _gpu then return end
   _w, _h = _gpu.getResolution()

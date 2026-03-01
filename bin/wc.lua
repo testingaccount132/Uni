@@ -7,7 +7,7 @@ local cwd = sys("getcwd")
 local count_l, count_w, count_c = false, false, false
 local files = {}
 
-for i = 2, #arg do
+for i = 1, #arg do
   if arg[i] == "-l" then count_l = true
   elseif arg[i] == "-w" then count_w = true
   elseif arg[i] == "-c" then count_c = true

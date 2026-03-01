@@ -1,5 +1,5 @@
 -- reboot – restart the computer
-local shutdown = arg[2] == "-h" or arg[2] == "--halt"
+local shutdown = arg[1] == "-h" or arg[1] == "--halt"
 if shutdown then
   print("Halting system…")
   computer.shutdown(false)

@@ -5,7 +5,7 @@ local lp  = kernel.require("lib.libpath")
 local cwd = sys("getcwd")
 
 local srcs = {}
-for i = 2, #arg do srcs[#srcs+1] = arg[i] end
+for i = 1, #arg do srcs[#srcs+1] = arg[i] end
 
 if #srcs < 2 then print("mv: missing operand"); return 1 end
 local dst = table.remove(srcs)

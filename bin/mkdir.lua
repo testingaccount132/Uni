@@ -7,7 +7,7 @@ local cwd = sys("getcwd")
 local parents = false
 local paths = {}
 
-for i = 2, #arg do
+for i = 1, #arg do
   if arg[i] == "-p" then parents = true
   else paths[#paths+1] = arg[i] end
 end

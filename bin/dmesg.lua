@@ -6,7 +6,7 @@ if not log or #log == 0 then
   return 0
 end
 
-local filter = arg[2]  -- optional level filter: INFO / WARN / ERR / PANIC
+local filter = arg[1]  -- optional level filter: INFO / WARN / ERR / PANIC
 
 local colors = {
   INFO  = "\27[0m",

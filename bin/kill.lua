@@ -3,7 +3,7 @@
 local sig = "SIGTERM"
 local pids = {}
 
-for i = 2, #arg do
+for i = 1, #arg do
   if arg[i]:sub(1,1) == "-" then
     sig = arg[i]:sub(2):upper()
     if not sig:match("^SIG") then sig = "SIG" .. sig end
