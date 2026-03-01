@@ -463,7 +463,7 @@ local function screen_disk()
   local chosen = disks[sel]
   if chosen.ro then
     status("That disk is read-only. Choose another.", C.danger)
-    os.sleep(1.5)
+    computer.pullSignal(1.5)
     return screen_disk()
   end
   return chosen

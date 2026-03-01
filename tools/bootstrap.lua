@@ -180,7 +180,7 @@ local function download(url, retries)
     if data then return data end
     if attempt < retries then
       log_warn("Retry "..attempt.."/"..retries.." ("..tostring(err)..")")
-      os.sleep(1)
+      computer.pullSignal(1)
     else
       return nil, err
     end

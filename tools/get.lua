@@ -67,16 +67,17 @@ local function http_get(url, timeout)
   if not internet then return nil, "no internet card" end
   local req, e = internet.request(url)
   if not req then return nil, tostring(e) end
-  local deadline = computer.uptime() + (timeout or 15)
+  local deadline = computer.uptime() + (timeout or 30)
   local data = ""
   while computer.uptime() < deadline do
-    local chunk, reason = req.read(8192)
-    if chunk == nil then
-      if reason then req.close(); return nil, reason end
+    local chunk, reason = req.read(65536)
+    if chunk then
+      data = data .. chunk
+    elseif reason then
+      req.close(); return nil, tostring(reason)
+    else
       break
     end
-    data = data .. chunk
-    os.sleep(0)
   end
   req.close()
   return data ~= "" and data or nil, "empty response"
