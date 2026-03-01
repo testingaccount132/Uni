@@ -33,7 +33,8 @@ local FILES = {
 }
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Terminal helpers (works under OpenOS)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Display setup
 -- ─────────────────────────────────────────────────────────────────────────────
 
 local gpu, screen
@@ -44,107 +45,104 @@ if gpu and screen then gpu.bind(screen.address) end
 local W, H = 80, 25
 if gpu then W, H = gpu.maxResolution() end
 
--- Colour palette
-local C = {
-  bg      = 0x050D18, panel   = 0x0D1E30, border  = 0x1A3A5C,
-  accent  = 0x00B4FF, accent2 = 0x0077CC, title   = 0xFFFFFF,
-  text    = 0xBBCCDD, dim     = 0x4A6070, muted   = 0x1A2A3A,
-  ok      = 0x00CC66, warn    = 0xFFAA00, err     = 0xFF4444,
-  prog    = 0x0099EE, prog_bg = 0x0A1E30,
-}
+-- Colours
+local BG     = 0x0A0E18   -- background
+local HDR_BG = 0x001830   -- header bar bg
+local HDR_FG = 0x00B4FF   -- header title
+local SUB_FG = 0x336688   -- header subtitle
+local TEXT   = 0xCCDDEE   -- normal text
+local DIM    = 0x445566   -- dim/info
+local OK     = 0x00CC66   -- success green
+local WARN   = 0xFFAA00   -- warning amber
+local ERR    = 0xFF4444   -- error red
+local PB_FG  = 0x0088DD   -- progress fill
+local PB_BG  = 0x0A1828   -- progress bg
+local PB_MT  = 0x1A2838   -- progress empty
 
-local function fg(c) if gpu then gpu.setForeground(c) end end
-local function bg(c) if gpu then gpu.setBackground(c) end end
-local function gset(x,y,s,f,b)
-  if not gpu then io.write(s); return end
+-- Row tracking for log area
+local LOG_START = 4        -- first log row (after 3-row header)
+local _log_row  = LOG_START
+local _log_lines = {}
+local LOG_MAX   = H - 5   -- leave 4 rows at bottom for progress+status
+
+local function gset(x, y, s, f, b)
+  if not gpu then io.write(tostring(s)); return end
   if f then gpu.setForeground(f) end
   if b then gpu.setBackground(b) end
-  gpu.set(x, y, s)
+  gpu.set(x, y, tostring(s))
 end
-local function fill(x,y,w,h,ch,f,b)
+local function gfill(x, y, w, h, ch, f, b)
   if not gpu then return end
   if f then gpu.setForeground(f) end
   if b then gpu.setBackground(b) end
-  gpu.fill(x,y,w,h,ch or " ")
+  gpu.fill(x, y, w, h, ch)
 end
-local function center(x,y,w,s,f,b)
-  gset(x + math.max(0, math.floor((w-#s)/2)), y, s, f, b)
-end
-
--- ─────────────────────────────────────────────────────────────────────────────
--- UI Layout
--- ─────────────────────────────────────────────────────────────────────────────
-
-local PW = math.min(W, 68)
-local PH = math.min(H, 20)
-local PX = math.floor((W-PW)/2)+1
-local PY = math.floor((H-PH)/2)+1
-local CX = PX+2
-local CW = PW-4
-
-local function draw_frame()
-  fill(1,1,W,H," ",C.dim,C.bg)
-  -- background dots
-  fg(0x080F1C); bg(C.bg)
-  for r=1,H,2 do gpu.set(1,r,string.rep("·",W)) end
-  -- panel
-  fill(PX,PY,PW,PH," ",C.text,C.panel)
-  -- border
-  fg(C.border); bg(C.panel)
-  gpu.set(PX, PY,     "╔"..string.rep("═",PW-2).."╗")
-  gpu.set(PX, PY+PH-1,"╚"..string.rep("═",PW-2).."╝")
-  for r=PY+1,PY+PH-2 do
-    gpu.set(PX,r,"║"); fill(PX+1,r,PW-2,1," "); gpu.set(PX+PW-1,r,"║")
-  end
-  -- title
-  center(PX+1,PY+1,PW-2,"UniOS Bootstrap Installer",C.accent,C.panel)
-  center(PX+1,PY+2,PW-2,"github.com/testingaccount132/Uni",C.dim,C.panel)
-  fg(C.border); bg(C.panel)
-  gpu.set(PX,PY+3,"╠"..string.rep("═",PW-2).."╣")
+local function center_str(s, width)
+  local pad = math.max(0, math.floor((width - #s) / 2))
+  return string.rep(" ", pad) .. s
 end
 
--- Scrolling log
-local _log_lines = {}
-local LOG_Y = PY+4
-local LOG_H = PH-8
+local function draw_header()
+  if not gpu then return end
+  -- Full-width header bar
+  gfill(1, 1, W, 1, " ", HDR_FG, HDR_BG)
+  local title = "  UniOS Bootstrap Installer"
+  local sub   = "github.com/testingaccount132/Uni  "
+  gpu.setForeground(HDR_FG); gpu.setBackground(HDR_BG)
+  gpu.set(1, 1, title)
+  gpu.setForeground(SUB_FG)
+  gpu.set(W - #sub + 1, 1, sub)
+  -- Background fill
+  gfill(1, 2, W, H - 1, " ", TEXT, BG)
+end
 
+-- Append a line to the scrolling log
 local function log(msg, col)
-  _log_lines[#_log_lines+1] = {msg=tostring(msg), col=col or C.text}
-  local start = math.max(1, #_log_lines-LOG_H+1)
-  for i=0,LOG_H-1 do
-    local e = _log_lines[start+i]
-    fill(CX, LOG_Y+i, CW, 1, " ", C.text, C.panel)
-    if e then gset(CX, LOG_Y+i, e.msg:sub(1,CW), e.col, C.panel) end
+  msg = tostring(msg):sub(1, W - 2)
+  _log_lines[#_log_lines + 1] = { msg = msg, col = col or TEXT }
+  if _log_row > LOG_MAX then
+    -- Scroll: shift lines up
+    gpu.copy(1, LOG_START + 1, W, LOG_MAX - LOG_START, 0, -1)
+    gfill(1, LOG_MAX, W, 1, " ", TEXT, BG)
+  else
+    _log_row = _log_row + 1
   end
+  local row = math.min(_log_row - 1, LOG_MAX)
+  gset(2, row, msg, col or TEXT, BG)
 end
 
-local function log_ok(m)   log("  ✓  "..m, C.ok)   end
-local function log_err(m)  log("  ✗  "..m, C.err)  end
-local function log_info(m) log("  ·  "..m, C.dim)  end
-local function log_warn(m) log("  ⚠  "..m, C.warn) end
+local function log_ok(m)   log(" ok  " .. m, OK)   end
+local function log_err(m)  log(" !!  " .. m, ERR)  end
+local function log_info(m) log(" ..  " .. m, DIM)  end
+local function log_warn(m) log(" **  " .. m, WARN) end
 
--- Progress bar
-local PROG_Y = PY+PH-4
+-- Bottom progress bar (second-to-last row)
+local PROG_ROW = H - 2
 local function progress(pct, label)
-  local inner = CW-2
-  local filled = math.floor(inner*pct/100)
-  fill(CX,   PROG_Y, 1, 1, "▕", C.border, C.panel)
-  fill(CX+1, PROG_Y, filled,      1, "█", C.prog,    C.prog_bg)
-  fill(CX+1+filled, PROG_Y, inner-filled, 1, "░", C.muted, C.prog_bg)
-  fill(CX+inner+1, PROG_Y, 1, 1, "▏", C.border, C.panel)
+  if not gpu then return end
+  local w      = W - 4
+  local filled = math.floor(w * pct / 100)
+  local empty  = w - filled
+  gpu.setBackground(PB_BG); gpu.setForeground(PB_FG)
+  if filled > 0 then gpu.set(3, PROG_ROW, string.rep("█", filled)) end
+  gpu.setForeground(PB_MT)
+  if empty  > 0 then gpu.set(3 + filled, PROG_ROW, string.rep("▒", empty)) end
   if label then
-    local lx = CX + math.floor((CW-#label)/2)
-    gset(lx, PROG_Y, label, C.title, C.prog_bg)
+    local lx = 3 + math.floor((w - #label) / 2)
+    gpu.setForeground(0xFFFFFF); gpu.set(lx, PROG_ROW, label)
   end
+  -- Restore bg
+  gpu.setBackground(BG)
 end
 
--- Status line
+-- Status bar (last row)
 local function status(msg, col)
-  fill(CX, PY+PH-2, CW, 1, " ", C.text, C.panel)
-  gset(CX, PY+PH-2, msg:sub(1,CW), col or C.dim, C.panel)
+  if not gpu then return end
+  gfill(1, H, W, 1, " ", col or DIM, HDR_BG)
+  gpu.set(2, H, tostring(msg):sub(1, W - 2))
 end
 
-local function sep() end  -- no-op: single top separator is enough
+local function sep() end   -- kept for call-site compatibility, does nothing
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Internet / filesystem helpers
@@ -229,23 +227,19 @@ local function choose_target()
   if #disks == 0 then return nil, "No suitable disk found (need writable HDD ≥1 MB)" end
   if #disks == 1 then return disks[1] end
 
-  -- Multiple disks: show a simple numbered menu
-  fill(CX, LOG_Y, CW, LOG_H, " ", C.text, C.panel)
-  gset(CX, LOG_Y, "Multiple writable disks found. Choose install target:", C.accent, C.panel)
+  -- Multiple disks — show numbered list and wait for keypress
+  log("Multiple disks found. Choose target:", WARN)
   for i, d in ipairs(disks) do
-    local line = string.format("  [%d] %-20s  %d KB  %s", i, d.label:sub(1,20), d.kb, d.addr:sub(1,8))
-    gset(CX, LOG_Y+i, line, i==1 and C.ok or C.text, C.panel)
+    log(string.format("  [%d] %-18s  %d KB  %s", i, d.label:sub(1,18), d.kb, d.addr:sub(1,8)),
+        i == 1 and OK or TEXT)
   end
-  status("Press 1-"..#disks.." to select target disk", C.warn)
+  status("Press 1-" .. #disks .. " to select disk", WARN)
 
   while true do
     local ev, _, char = computer.pullSignal(0.1)
     if ev == "key_down" then
-      local n = char - 48  -- ASCII '0'=48
-      if n >= 1 and n <= #disks then
-        fill(CX, LOG_Y, CW, LOG_H, " ", C.text, C.panel)
-        return disks[n]
-      end
+      local n = char - 48
+      if n >= 1 and n <= #disks then return disks[n] end
     end
   end
 end
@@ -255,13 +249,13 @@ end
 -- ─────────────────────────────────────────────────────────────────────────────
 
 local function run()
-  if gpu then draw_frame(); sep() end
+  if gpu then draw_header() end
 
   -- Check internet
   if not internet then
     log_err("No internet card detected!")
     log_warn("Install the internet card and rerun.")
-    status("Fatal: no internet card.", C.err)
+    status("Fatal: no internet card.", ERR)
     if gpu then progress(100,"  FAILED  ") end
     return false
   end
@@ -270,11 +264,11 @@ local function run()
   log_info("Source: "..REPO)
 
   -- Choose target
-  status("Selecting install target…", C.dim)
+  status("Selecting install target…", DIM)
   local disk, disk_err = choose_target()
   if not disk then
     log_err("Disk error: "..(disk_err or "?"))
-    status("Fatal: "..tostring(disk_err), C.err)
+    status("Fatal: "..tostring(disk_err), ERR)
     if gpu then progress(100,"  FAILED  ") end
     return false
   end
@@ -283,7 +277,7 @@ local function run()
   local total = #FILES
   local done  = 0
   log_info("Downloading "..total.." files…")
-  status("Downloading UniOS…", C.dim)
+  status("Downloading UniOS…", DIM)
   if gpu then progress(5,"  Downloading…  ") end
 
   for _, rel_path in ipairs(FILES) do
@@ -295,7 +289,7 @@ local function run()
     local data, err = download(url, 3)
     if not data then
       log_err("FAIL: "..rel_path.." ("..tostring(err)..")")
-      status("Error: "..tostring(err), C.err)
+      status("Error: "..tostring(err), ERR)
       if gpu then progress(100,"  FAILED  ") end
       return false
     end
@@ -308,7 +302,7 @@ local function run()
       log_ok(short.." ("..#data.."B)")
     else
       log_err("Write failed: "..local_path)
-      status("Write error: "..local_path, C.err)
+      status("Write error: "..local_path, ERR)
       if gpu then progress(100,"  FAILED  ") end
       return false
     end
@@ -376,7 +370,7 @@ local function run()
 
   log_ok("")
   log_ok("Installation complete!  Reboot to start UniOS.")
-  status("Done! Reboot to start UniOS.", C.ok)
+  status("Done! Reboot to start UniOS.", OK)
   if gpu then progress(100,"  Done!  ") end
   return true
 end
@@ -387,20 +381,12 @@ end
 
 local ok = run()
 
--- Wait for keypress (only in GPU/interactive mode)
+-- Wait for keypress then restore terminal
 if gpu then
-  fg(C.dim); bg(C.panel)
-  gpu.set(CX, PY+PH-2, "Press any key to exit…")
+  status("Press any key to exit…", DIM)
   computer.pullSignal()
-end
-
--- Restore terminal
-if gpu then
   gpu.setBackground(0x000000); gpu.setForeground(0xFFFFFF)
-  gpu.fill(1,1,W,H," ")
-  if ok then
-    gpu.set(1,1,"UniOS installed. Type 'reboot' to restart.")
-  else
-    gpu.set(1,1,"Bootstrap finished with errors. Check the log above.")
-  end
+  gpu.fill(1, 1, W, H, " ")
+  gpu.set(1, 1, ok and "UniOS installed. Type 'reboot' to start."
+               or  "Bootstrap finished with errors. Check the log above.")
 end
