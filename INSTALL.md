@@ -51,7 +51,7 @@ This downloads every UniOS file, installs it to your chosen disk, and flashes th
 Paste this into your OpenOS terminal:
 
 ```sh
-wget -q https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
+wget -fq https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
 ```
 
 That's it. The bootstrap will:
@@ -106,7 +106,7 @@ git clone https://github.com/testingaccount132/Uni.git
 
 **From an OpenOS machine with internet:**
 ```sh
-wget -q https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua
+wget -fq https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua
 lua /tmp/bs.lua
 # This installs to the current machine; that disk becomes your installer
 ```
@@ -464,7 +464,7 @@ print("Restored.")
 ```
 INSTALL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Easiest:   wget …/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
+Easiest:   wget -fq …/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
 Offline:   Installer disk + installer_eeprom → TUI wizard
 Update:    get --update
 Check:     get --check

@@ -58,7 +58,7 @@ It ships with:
 Paste this in OpenOS with an internet card:
 
 ```sh
-wget -q https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
+wget -fq https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
 ```
 
 The bootstrap downloads every file, installs it to your disk, flashes the EEPROM — then just `reboot`.

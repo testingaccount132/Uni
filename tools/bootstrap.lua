@@ -3,7 +3,7 @@
 --
 -- Paste this one-liner into OpenOS with an internet card:
 --
---   wget -q https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
+--   wget -fq https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
 
 local component = component or require("component")
 local computer  = computer  or require("computer")
