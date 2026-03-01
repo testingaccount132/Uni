@@ -5,8 +5,9 @@
 --
 --   wget -q https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
 
-local component = component
-local computer  = computer
+local component = component or require("component")
+local computer  = computer  or require("computer")
+local fs        = fs        or (pcall(require,"filesystem") and require("filesystem") or nil)
 
 -- ── URL config ────────────────────────────────────────────────────────────────
 
@@ -202,14 +203,14 @@ local function download(url, retries)
   end
 end
 
--- Ensure parent directories exist on the local filesystem
-local function mkdirp(path)
+-- Ensure parent directories exist on the target filesystem
+local function mkdirp(diskfs, path)
   local parts = {}
   for seg in path:gmatch("[^/]+") do parts[#parts+1] = seg end
   local built = ""
   for i = 1, #parts-1 do
     built = built .. "/" .. parts[i]
-    if not fs.exists(built) then fs.makeDirectory(built) end
+    if not diskfs.exists(built) then diskfs.makeDirectory(built) end
   end
 end
 
@@ -283,9 +284,6 @@ local function run()
   end
   log_ok("Target: "..disk.label.." ("..disk.addr:sub(1,8).."…)")
 
-  local total = #FILES
-  local done  = 0
-
   -- Fetch file list from GitHub API
   local FILES
   status("Fetching file list from GitHub…", C.dim)
@@ -321,6 +319,7 @@ local function run()
   end
 
   local total = #FILES
+  local done  = 0
   log_info("Downloading "..total.." files from "..REPO.."…")
   status("Downloading UniOS…", C.dim)
   if gpu then progress(5,"  Downloading…  ") end
@@ -340,7 +339,7 @@ local function run()
       failed[#failed+1] = rel_path
     else
       -- Write to target filesystem
-      mkdirp(local_path)
+      mkdirp(disk.fs, local_path)
       local h = disk.fs.open(local_path, "w")
       if h then
         disk.fs.write(h, data)
@@ -438,12 +437,12 @@ end
 
 local ok = run()
 
--- Wait for keypress
+-- Wait for keypress (only in GPU/interactive mode)
 if gpu then
   fg(C.dim); bg(C.panel)
   gpu.set(CX, PY+PH-2, "Press any key to exit…")
+  computer.pullSignal()
 end
-computer.pullSignal()
 
 -- Restore terminal
 if gpu then
