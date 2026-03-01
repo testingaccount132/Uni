@@ -117,7 +117,20 @@ local _ansi_buf = nil  -- buffer while inside escape sequence
 
 function gpu_drv.write(text)
   if not _gpu then return end
-  if _cursor_shown then gpu_drv.hide_cursor() end
+  if _cursor_shown then
+    -- Restore the saved cell before writing, to prevent "ghost" inverted blocks.
+    -- We must restore here because write() may or may not overwrite the cursor cell.
+    local sx = _cursor_sx or _cx
+    local sy = _cursor_sy or _cy
+    _gpu.setForeground(_cursor_save_fg or _fg)
+    _gpu.setBackground(_cursor_save_bg or _bg)
+    _gpu.set(sx, sy, _cursor_save_ch or " ")
+    _gpu.setForeground(_fg)
+    _gpu.setBackground(_bg)
+    _cursor_shown = false
+    _cursor_sx, _cursor_sy = nil, nil
+    _cursor_save_ch, _cursor_save_fg, _cursor_save_bg = nil, nil, nil
+  end
   text = tostring(text)
   local i = 1
   while i <= #text do
@@ -216,16 +229,13 @@ function gpu_drv.show_cursor()
   if not _gpu or not _cursor_blink then return end
   if _cursor_shown then return end
   _cursor_sx, _cursor_sy = _cx, _cy
-  -- Save what's actually at this position (OpenComputers gpu.get returns char, fg, bg)
   local ch, gfg, gbg = _gpu.get(_cx, _cy)
-  _cursor_save_ch = ch
-  _cursor_save_fg = gfg
-  _cursor_save_bg = gbg
-  -- Draw inverted cursor block
-  _gpu.setForeground(gbg or _bg)
-  _gpu.setBackground(gfg or _fg)
-  _gpu.set(_cx, _cy, ch or " ")
-  -- Restore GPU color state
+  _cursor_save_ch = ch or " "
+  _cursor_save_fg = gfg or _fg
+  _cursor_save_bg = gbg or _bg
+  _gpu.setForeground(_cursor_save_bg)
+  _gpu.setBackground(_cursor_save_fg)
+  _gpu.set(_cx, _cy, _cursor_save_ch)
   _gpu.setForeground(_fg)
   _gpu.setBackground(_bg)
   _cursor_shown = true
@@ -235,18 +245,14 @@ function gpu_drv.hide_cursor()
   if not _gpu or not _cursor_shown then return end
   local sx = _cursor_sx or _cx
   local sy = _cursor_sy or _cy
-  -- Restore exactly what was there before
   _gpu.setForeground(_cursor_save_fg or _fg)
   _gpu.setBackground(_cursor_save_bg or _bg)
   _gpu.set(sx, sy, _cursor_save_ch or " ")
-  -- Restore GPU color state
   _gpu.setForeground(_fg)
   _gpu.setBackground(_bg)
   _cursor_shown = false
   _cursor_sx, _cursor_sy = nil, nil
-  _cursor_save_ch = nil
-  _cursor_save_fg = nil
-  _cursor_save_bg = nil
+  _cursor_save_ch, _cursor_save_fg, _cursor_save_bg = nil, nil, nil
 end
 
 function gpu_drv.set_cursor_blink(enabled)

@@ -766,7 +766,9 @@ local function readline_with_history()
   kernel.signal.set_fg(_pid)
 
   while true do
+    gpu.set_cursor_blink(true)
     local ch = _io.read_char()
+    gpu.set_cursor_blink(false)
 
     if ch == "\n" or ch == "\r" then
       _io.write("\n")

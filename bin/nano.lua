@@ -669,8 +669,10 @@ local function main()
   redraw_all()
 
   while true do
+    gpu_drv.set_cursor_blink(true)
     coroutine.yield()
     local ch = kbd.getchar()
+    gpu_drv.set_cursor_blink(false)
     local action = handle_key(ch)
     if action == "quit" then break end
   end

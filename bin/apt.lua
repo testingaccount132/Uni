@@ -34,7 +34,7 @@ local REPO_API = "https://api.github.com/repos/testingaccount132/Uni/git/trees/m
 
 -- Files/dirs to skip during system upgrade
 local SKIP_PATTERNS = {
-  "^%.",            -- dotfiles
+  "^%.",              -- dotfiles (.gitignore, .github/, etc.)
   "^README",
   "^LICENSE",
   "^INSTALL",
@@ -43,8 +43,10 @@ local SKIP_PATTERNS = {
   "%.json$",
   "%.yml$",
   "%.yaml$",
-  "^repo/",         -- repo packages are installed via apt install
-  "^eeprom/bios%.lua$",  -- skip full bios if min exists
+  "^repo/",           -- repo packages are installed via apt install
+  "^scripts/",        -- build scripts (minify.js etc.)
+  "^tools/minify",    -- minification tool, not needed at runtime
+  "^eeprom/bios%.lua$",  -- skip full bios; .min.lua is what gets flashed
 }
 
 local function should_skip(path)
