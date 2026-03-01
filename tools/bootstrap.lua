@@ -25,17 +25,24 @@ local function should_skip(path)
 end
 
 -- Parse blob paths from the GitHub tree API JSON response.
--- No JSON library needed — the structure is regular enough for pattern matching.
+-- Scans for consecutive "path" and "type" fields within each tree entry.
+-- Works without a JSON library by matching field patterns directly.
 local function parse_tree(json)
   local files = {}
-  for obj in json:gmatch("{([^}]+)}") do
-    local ftype = obj:match('"type"%s*:%s*"([^"]+)"')
-    if ftype == "blob" then
-      local path = obj:match('"path"%s*:%s*"([^"]+)"')
-      if path and not should_skip(path) then
-        files[#files+1] = path
-      end
+  -- Each tree entry looks like: {"path":"...","mode":"...","type":"blob",...}
+  -- We extract path+type pairs by scanning "path":"VALUE" then nearby "type":"VALUE"
+  local pos = 1
+  while true do
+    -- Find next "path" field
+    local ps, pe, path = json:find('"path"%s*:%s*"([^"]*)"', pos)
+    if not ps then break end
+    -- Look for "type" field within the next 300 chars of this entry
+    local window = json:sub(pe + 1, pe + 300)
+    local ftype  = window:match('"type"%s*:%s*"([^"]*)"')
+    if ftype == "blob" and not should_skip(path) then
+      files[#files+1] = path
     end
+    pos = pe + 1
   end
   table.sort(files)
   return files
@@ -169,20 +176,20 @@ local function http_get(url)
   if not internet then return nil, "no internet card" end
   local req, err = internet.request(url)
   if not req then return nil, tostring(err) end
-  local deadline = computer.uptime() + 15
+  local data    = ""
+  local deadline = computer.uptime() + 30
   while computer.uptime() < deadline do
-    local chunk, reason = req.read()
-    if chunk == nil then
-      if reason then req.close(); return nil, reason end
+    local chunk, reason = req.read(8192)
+    if chunk then
+      data = data .. chunk
+    elseif reason then
+      req.close()
+      return nil, tostring(reason)
+    else
+      -- nil chunk + nil reason = response complete
       break
     end
     os.sleep(0)
-  end
-  local data = ""
-  while true do
-    local chunk = req.read(math.huge)
-    if not chunk then break end
-    data = data .. chunk
   end
   req.close()
   return data ~= "" and data or nil, data == "" and "empty response" or nil
@@ -219,18 +226,22 @@ end
 -- ─────────────────────────────────────────────────────────────────────────────
 
 local function choose_target()
-  -- Collect writable filesystems
+  -- Collect writable filesystems, excluding tmpfs and tiny (<512 KB) volumes
   local disks = {}
   for addr in component.list("filesystem") do
     local f = component.proxy(addr)
     if not f.isReadOnly() then
       local label = (f.getLabel and f.getLabel()) or "unlabeled"
-      local kb = math.floor((f.spaceTotal and f.spaceTotal() or 0)/1024)
-      disks[#disks+1] = { addr=addr, fs=f, label=label, kb=kb }
+      local total = (f.spaceTotal and f.spaceTotal()) or 0
+      local kb    = math.floor(total / 1024)
+      -- Skip in-memory / tmpfs (label "tmpfs" or capacity < 512 KB)
+      if label:lower() ~= "tmpfs" and total >= 512 * 1024 then
+        disks[#disks+1] = { addr=addr, fs=f, label=label, kb=kb }
+      end
     end
   end
 
-  if #disks == 0 then return nil, "No writable disk found" end
+  if #disks == 0 then return nil, "No suitable writable disk found (need ≥512 KB HDD/floppy)" end
   if #disks == 1 then return disks[1] end
 
   -- Multiple disks: show a simple numbered menu

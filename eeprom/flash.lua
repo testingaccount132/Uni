@@ -8,8 +8,8 @@
 --   flash.lua --verify        → verify only, don't write
 --   flash.lua --dump          → dump current EEPROM to stdout
 
-local component = component
-local computer  = computer
+local component = component or require("component")
+local computer  = computer  or require("computer")
 
 -- ── Minimal GPU/terminal bootstrap ───────────────────────────────────────────
 -- We may be running under OpenOS or UniOS; handle both.
