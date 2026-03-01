@@ -27,7 +27,8 @@ local FILES = {
   "bin/kill.lua","bin/grep.lua","bin/df.lua","bin/free.lua","bin/uptime.lua",
   "bin/wc.lua","bin/head.lua","bin/tail.lua","bin/touch.lua","bin/clear.lua",
   "bin/reboot.lua","bin/dmesg.lua","bin/which.lua","bin/env.lua","bin/hostname.lua",
-  "bin/nano.lua","bin/apt.lua",
+  "bin/nano.lua","bin/apt.lua","bin/compositor.lua",
+  "lib/libgui.lua",
   "etc/hostname","etc/passwd","etc/profile","etc/rc",
   "etc/apt/sources.list",
   "var/lib/apt/installed",
@@ -278,6 +279,27 @@ local function run()
   end
   log_ok("Target: "..disk.label.." ("..disk.addr:sub(1,8).."…)")
 
+  -- Confirmation warning
+  log("")
+  log("WARNING: This will overwrite files on "..disk.label.."!", WARN)
+  log("All existing UniOS files will be replaced.", WARN)
+  log("Press ENTER to continue or Q to cancel...", TEXT)
+  status("Press ENTER to install, Q to cancel", WARN)
+
+  while true do
+    local ev, _, char, code = computer.pullSignal(0.1)
+    if ev == "key_down" then
+      if code == 28 then break end
+      if char == 113 or char == 81 then
+        log_warn("Installation cancelled by user.")
+        status("Cancelled.", WARN)
+        return false
+      end
+    end
+  end
+
+  log_ok("Installation confirmed")
+
   local total = #FILES
   local done  = 0
   log_info("Downloading "..total.." files…")
@@ -385,12 +407,29 @@ end
 
 local ok = run()
 
--- Wait for keypress then restore terminal
 if gpu then
-  status("Press any key to exit…", DIM)
-  computer.pullSignal()
-  gpu.setBackground(0x000000); gpu.setForeground(0xFFFFFF)
-  gpu.fill(1, 1, W, H, " ")
-  gpu.set(1, 1, ok and "UniOS installed. Type 'reboot' to start."
-               or  "Bootstrap finished with errors. Check the log above.")
+  if ok then
+    -- Auto-reboot countdown
+    for sec = 5, 1, -1 do
+      status("Rebooting in "..sec.."s... Press any key to cancel.", OK)
+      local ev = computer.pullSignal(1)
+      if ev == "key_down" then
+        status("Auto-reboot cancelled. Type 'reboot' to start UniOS.", DIM)
+        computer.pullSignal()
+        gpu.setBackground(0x000000); gpu.setForeground(0xFFFFFF)
+        gpu.fill(1, 1, W, H, " ")
+        gpu.set(1, 1, "UniOS installed. Type 'reboot' to start.")
+        return
+      end
+    end
+    status("Rebooting now...", OK)
+    os.sleep(0.5)
+    computer.shutdown(true)
+  else
+    status("Press any key to exit…", DIM)
+    computer.pullSignal()
+    gpu.setBackground(0x000000); gpu.setForeground(0xFFFFFF)
+    gpu.fill(1, 1, W, H, " ")
+    gpu.set(1, 1, "Bootstrap finished with errors. Check the log above.")
+  end
 end

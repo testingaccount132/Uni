@@ -40,8 +40,12 @@ files: installer/install.lua
 depends: core
 files: eeprom/flash.lua
 
+@gui 1.0.0 Graphical desktop environment (compositor, file browser, terminal)
+depends: core libs
+files: lib/libgui.lua bin/compositor.lua
+
 @system 1.0.0 Full UniOS system (meta-package)
-depends: core libs coreutils sh nano apt net-tools eeprom-tools
+depends: core libs coreutils sh nano apt net-tools eeprom-tools gui
 files:
 
 @dev-tools 1.0.0 Developer tools (minify, bootstrap, uninstall)

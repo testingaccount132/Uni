@@ -1,9 +1,10 @@
-core 1.0.0
-libs 1.0.0
-coreutils 1.0.0
-sh 1.0.0
-nano 1.0.0
 apt 1.0.0
-net-tools 1.0.0
-eeprom-tools 1.0.0
 config 1.0.0
+core 1.0.0
+coreutils 1.0.0
+eeprom-tools 1.0.0
+gui 1.0.0
+libs 1.0.0
+nano 1.0.0
+net-tools 1.0.0
+sh 1.0.0
