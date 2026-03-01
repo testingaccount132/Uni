@@ -2,7 +2,7 @@
 -- Supports: pipes, redirections, variables, quoting, globbing,
 -- builtins, background jobs, command history, and tab completion.
 
-local VERSION = "sh 1.0 (UniOS)"
+local VERSION = "1.0"
 
 -- ── Globals available from kernel ────────────────────────────────────────────
 local gpu = kernel.drivers.gpu
@@ -287,11 +287,12 @@ builtins["alias"] = function(argv)
     for k, v in pairs(_aliases) do sh_writeln("alias " .. k .. "='" .. v .. "'") end
     return 0
   end
-  -- Join all args after "alias" so quoted values with spaces work
+  -- Join all args so quoted values with spaces survive tokenization
   local def = table.concat(argv, " ", 2)
-  -- Strip surrounding quotes from value: alias name='val' or alias name="val"
+  -- Name: word chars, dash, underscore, dot (for .. and ... aliases)
   local k, v = def:match("^([%w_%-%.]+)=(.*)$")
   if k then
+    -- Strip surrounding single or double quotes from the value
     v = v:match("^'(.*)'$") or v:match('^"(.*)"$') or v
     _aliases[k] = v
   else
@@ -341,7 +342,7 @@ builtins["type"] = function(argv)
 end
 
 builtins["help"] = function()
-  sh_writeln("\27[1;36mUniOS sh " .. VERSION .. "\27[0m")
+  sh_writeln("\27[1;36mUniOS sh " .. VERSION .. " (" .. kernel.VERSION .. ")\27[0m")
   sh_writeln("Builtins: " .. table.concat(lc.keys(builtins), ", "))
   return 0
 end
@@ -572,7 +573,8 @@ pcall(function()
   if rc then sh_exec_string(rc) end
 end)
 
--- Print banner
+-- Clear boot log and print banner
+gpu.clear()
 gpu.write("\27[1;36m" .. kernel.VERSION .. "\27[0m  |  type 'help' for builtins\n\n")
 
 while _running do
