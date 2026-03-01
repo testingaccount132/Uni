@@ -207,22 +207,25 @@ end
 -- ── Cursor rendering ────────────────────────────────────────────────────────
 local _cursor_blink   = true
 local _cursor_shown   = false
-local _cursor_sx, _cursor_sy = nil, nil   -- position where cursor was drawn
-local _cursor_char    = nil
-local _cursor_cfg     = nil
-local _cursor_cbg     = nil
+local _cursor_sx, _cursor_sy = nil, nil
+local _cursor_save_ch  = nil
+local _cursor_save_fg  = nil
+local _cursor_save_bg  = nil
 
 function gpu_drv.show_cursor()
   if not _gpu or not _cursor_blink then return end
   if _cursor_shown then return end
   _cursor_sx, _cursor_sy = _cx, _cy
-  local ch, fg, bg = _gpu.get(_cx, _cy)
-  _cursor_char = ch or " "
-  _cursor_cfg  = fg or _fg
-  _cursor_cbg  = bg or _bg
-  _gpu.setForeground(0x000000)
-  _gpu.setBackground(0xFFFFFF)
-  _gpu.set(_cx, _cy, _cursor_char)
+  -- Save what's actually at this position (OpenComputers gpu.get returns char, fg, bg)
+  local ch, gfg, gbg = _gpu.get(_cx, _cy)
+  _cursor_save_ch = ch
+  _cursor_save_fg = gfg
+  _cursor_save_bg = gbg
+  -- Draw inverted cursor block
+  _gpu.setForeground(gbg or _bg)
+  _gpu.setBackground(gfg or _fg)
+  _gpu.set(_cx, _cy, ch or " ")
+  -- Restore GPU color state
   _gpu.setForeground(_fg)
   _gpu.setBackground(_bg)
   _cursor_shown = true
@@ -230,13 +233,20 @@ end
 
 function gpu_drv.hide_cursor()
   if not _gpu or not _cursor_shown then return end
-  _gpu.setForeground(_cursor_cfg or _fg)
-  _gpu.setBackground(_cursor_cbg or _bg)
-  _gpu.set(_cursor_sx or _cx, _cursor_sy or _cy, _cursor_char or " ")
+  local sx = _cursor_sx or _cx
+  local sy = _cursor_sy or _cy
+  -- Restore exactly what was there before
+  _gpu.setForeground(_cursor_save_fg or _fg)
+  _gpu.setBackground(_cursor_save_bg or _bg)
+  _gpu.set(sx, sy, _cursor_save_ch or " ")
+  -- Restore GPU color state
   _gpu.setForeground(_fg)
   _gpu.setBackground(_bg)
   _cursor_shown = false
   _cursor_sx, _cursor_sy = nil, nil
+  _cursor_save_ch = nil
+  _cursor_save_fg = nil
+  _cursor_save_bg = nil
 end
 
 function gpu_drv.set_cursor_blink(enabled)
@@ -246,7 +256,9 @@ end
 
 function gpu_drv.clear()
   if not _gpu then return end
-  if _cursor_shown then _cursor_shown = false end
+  _cursor_shown = false
+  _cursor_sx, _cursor_sy = nil, nil
+  _cursor_save_ch, _cursor_save_fg, _cursor_save_bg = nil, nil, nil
   _w, _h = _gpu.getResolution()
   _fg = 0xFFFFFF; _bg = 0x000000
   _gpu.setForeground(_fg)
