@@ -99,19 +99,33 @@ end
 function scheduler._deliver_signal(proc, sig)
   if sig == "SIGKILL" then
     kernel.process.exit(proc.pid, 137)
+  elseif sig == "SIGINT" then
+    if proc.signal_handlers and proc.signal_handlers["SIGINT"] then
+      pcall(proc.signal_handlers["SIGINT"])
+    else
+      kernel.process.exit(proc.pid, 130)
+    end
   elseif sig == "SIGTERM" then
-    -- Give process a chance to handle it via its signal table
     if proc.signal_handlers and proc.signal_handlers["SIGTERM"] then
       pcall(proc.signal_handlers["SIGTERM"])
     else
       kernel.process.exit(proc.pid, 143)
     end
+  elseif sig == "SIGTSTP" then
+    if proc.signal_handlers and proc.signal_handlers["SIGTSTP"] then
+      pcall(proc.signal_handlers["SIGTSTP"])
+    else
+      proc.state = "stopped"
+      kernel.info("scheduler: pid=" .. proc.pid .. " stopped (SIGTSTP)")
+    end
   elseif sig == "SIGSTOP" then
     proc.state = "stopped"
   elseif sig == "SIGCONT" then
-    if proc.state == "stopped" then proc.state = "running" end
+    if proc.state == "stopped" then
+      proc.state = "running"
+      kernel.info("scheduler: pid=" .. proc.pid .. " continued (SIGCONT)")
+    end
   end
-  -- SIGCHLD and others: just wake the process
   if proc.state == "sleeping" then proc.state = "running" end
 end
 

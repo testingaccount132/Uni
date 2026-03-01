@@ -203,6 +203,21 @@ function syscall.init()
     return true, result
   end)
 
+  -- ── Signal handling ──────────────────────────────────────────────────────
+  def("signal", function(sig, handler)
+    local pid = kernel.scheduler.current_pid()
+    local proc = kernel.process.get(pid)
+    if not proc then return false end
+    if sig == "SIGKILL" or sig == "SIGSTOP" then return false end
+    proc.signal_handlers = proc.signal_handlers or {}
+    proc.signal_handlers[sig] = handler
+    return true
+  end)
+
+  def("getpgid", function()
+    return kernel.signal.fg()
+  end)
+
   -- ── TTY/PTY ────────────────────────────────────────────────────────────────
   def("tty_create", function(id, opts)
     return kernel.drivers.tty.create(id, opts)

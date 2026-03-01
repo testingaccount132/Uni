@@ -13,14 +13,27 @@ local REPO     = "https://raw.githubusercontent.com/testingaccount132/Uni/main"
 local API_TREE = "https://api.github.com/repos/testingaccount132/Uni/git/trees/main?recursive=1"
 local BRANCH   = "main"
 
--- Files/patterns to skip when doing --all / --update
 local SKIP = {
-  ["README.md"]  = true,
-  ["LICENSE"]    = true,
-  [".gitignore"] = true,
+  ["README.md"]    = true,
+  ["INSTALL.md"]   = true,
+  ["LICENSE"]       = true,
+  [".gitignore"]    = true,
+  [".gitattributes"] = true,
 }
+local SKIP_EXT = { ".md", ".js", ".json", ".yml", ".yaml", ".toml" }
+local SKIP_PREFIX = { ".", "repo/" }
 local function should_skip(path)
-  return SKIP[path] or path:match("^%.") ~= nil
+  if SKIP[path] then return true end
+  for _, ext in ipairs(SKIP_EXT) do
+    if path:sub(-#ext) == ext then return true end
+  end
+  for _, pfx in ipairs(SKIP_PREFIX) do
+    if path:sub(1, #pfx) == pfx then return true end
+  end
+  if path:match("%.min%.lua$") then return false end
+  local base = path:match("([^/]+)$") or path
+  if base:sub(1, 1) == "." then return true end
+  return false
 end
 
 -- ── Tiny JSON field extractor ─────────────────────────────────────────────────

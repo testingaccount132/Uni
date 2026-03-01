@@ -19,7 +19,7 @@ local FILES = {
   "boot/init.lua",
   "kernel/kernel.lua","kernel/process.lua","kernel/scheduler.lua",
   "kernel/signal.lua","kernel/syscall.lua",
-  "fs/vfs.lua","fs/devfs.lua","fs/tmpfs.lua",
+  "fs/vfs.lua","fs/devfs.lua","fs/tmpfs.lua","fs/procfs.lua",
   "drivers/gpu.lua","drivers/keyboard.lua","drivers/disk.lua",
   "drivers/tty.lua","drivers/pty.lua",
   "lib/libc.lua","lib/libio.lua","lib/libpath.lua","lib/libterm.lua","lib/pkg.lua",

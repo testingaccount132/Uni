@@ -10,3 +10,15 @@
 @gui 1.0.0 Graphical desktop environment with compositor, taskbar, file browser, and terminal
 depends:
 files: lib/libgui.lua bin/compositor.lua
+
+@bash 1.0.0 Advanced shell with functions, arrays, arithmetic, test/[, and more
+depends:
+files: bin/bash.lua
+
+@nano 1.1.0 Terminal text editor with search, syntax highlighting, and line numbers
+depends:
+files: bin/nano.lua
+
+@dev-tools 1.0.0 Development utilities (get, uninstall)
+depends:
+files: tools/get.lua tools/uninstall.lua

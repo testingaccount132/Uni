@@ -661,6 +661,7 @@ local function main()
   pcall(function() if sys then cwd = sys("getcwd") or cwd end end)
   init_screen()
   kbd.set_raw(true)
+  gpu_drv.set_cursor_blink(false)
 
   local file_arg = arg and arg[1]
   load_file(file_arg)
@@ -675,12 +676,14 @@ local function main()
   end
 
   kbd.set_raw(false)
+  gpu_drv.set_cursor_blink(true)
   gpu_drv.clear()
   return 0
 end
 
 local ok, err = pcall(main)
 kbd.set_raw(false)
+pcall(function() gpu_drv.set_cursor_blink(true) end)
 pcall(function() gpu_drv.clear() end)
 if not ok then
   pcall(function()

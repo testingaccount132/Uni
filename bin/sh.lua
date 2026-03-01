@@ -393,6 +393,61 @@ builtins["type"] = function(argv)
   return 0
 end
 
+builtins["jobs"] = function()
+  if #_jobs == 0 then return 0 end
+  for _, job in ipairs(_jobs) do
+    local proc = kernel.process.get(job.pid)
+    local state = proc and proc.state or "dead"
+    sh_writeln(string.format("[%d]  %-10s %s (pid %d)", job.id, state, job.name, job.pid))
+  end
+  return 0
+end
+
+builtins["fg"] = function(argv)
+  local id = tonumber(argv[2])
+  local job = nil
+  if id then
+    for _, j in ipairs(_jobs) do if j.id == id then job = j; break end end
+  else
+    job = _jobs[#_jobs]
+  end
+  if not job then sh_err("fg: no such job"); return 1 end
+  local proc = kernel.process.get(job.pid)
+  if proc then
+    kernel.signal.send(job.pid, "SIGCONT")
+    kernel.signal.set_fg(job.pid)
+    sh_writeln(job.name)
+    while true do
+      proc = kernel.process.get(job.pid)
+      if not proc or proc.state == "zombie" or proc.state == "stopped" then break end
+      coroutine.yield()
+    end
+    kernel.signal.set_fg(_pid)
+    if proc and proc.state == "stopped" then
+      sh_writeln("[" .. job.id .. "]  Stopped    " .. job.name)
+    else
+      for i, j in ipairs(_jobs) do
+        if j.id == job.id then table.remove(_jobs, i); break end
+      end
+    end
+  end
+  return 0
+end
+
+builtins["bg"] = function(argv)
+  local id = tonumber(argv[2])
+  local job = nil
+  if id then
+    for _, j in ipairs(_jobs) do if j.id == id then job = j; break end end
+  else
+    job = _jobs[#_jobs]
+  end
+  if not job then sh_err("bg: no such job"); return 1 end
+  kernel.signal.send(job.pid, "SIGCONT")
+  sh_writeln("[" .. job.id .. "]  " .. job.name .. " &")
+  return 0
+end
+
 builtins["help"] = function()
   sh_writeln("\27[1;36mUniOS sh " .. VERSION .. " (" .. kernel.VERSION .. ")\27[0m")
   sh_writeln("")
@@ -425,11 +480,13 @@ end
 -- ── Command execution ─────────────────────────────────────────────────────────
 
 local _last_exit = 0
+local _jobs = {}     -- background jobs: { pid, name, state }
+local _next_job = 1
 
-local function exec_cmd(cmd)
+local function exec_cmd(cmd, pipe_input)
   local argv   = cmd.argv
   local name   = argv[1]
-  if not name or name == "" then return 0 end
+  if not name or name == "" then return 0, "" end
 
   -- Alias expansion (one level)
   if _aliases[name] then
@@ -443,52 +500,166 @@ local function exec_cmd(cmd)
     name = argv[1]
   end
 
-  -- Builtin
+  -- Handle output redirection
+  local redir_out_file = nil
+  local redir_out_append = false
+  local redir_in_file = nil
+  if cmd.stdout then
+    redir_out_file = cmd.stdout.file
+    redir_out_append = cmd.stdout.append
+  end
+  if cmd.stdin then
+    redir_in_file = cmd.stdin
+  end
+
+  -- Capture output into a buffer for piping
+  local out_buf = {}
+  local old_write = _io.write
+  local capturing = false
+
+  local function capture_write(s)
+    s = tostring(s)
+    out_buf[#out_buf + 1] = s
+  end
+
+  local function setup_redirect()
+    capturing = true
+    _io.write = capture_write
+  end
+
+  local function finish_redirect()
+    _io.write = old_write
+    local output = table.concat(out_buf)
+
+    if redir_out_file then
+      local abs = lp.resolve(redir_out_file, _cwd)
+      -- /dev/null: discard
+      if abs == "/dev/null" then return output end
+      if redir_out_append then
+        vfs.writefile(abs, output, true)
+      else
+        vfs.writefile(abs, output, false)
+      end
+      return output
+    end
+    return output
+  end
+
+  -- Read stdin from file if redirected
+  if redir_in_file and not pipe_input then
+    local abs = lp.resolve(redir_in_file, _cwd)
+    pipe_input = vfs.readfile(abs) or ""
+  end
+
+  -- If we have pipe input, override _io.readline
+  local old_readline = _io.readline
+  local old_read_char = _io.read_char
+  if pipe_input and #pipe_input > 0 then
+    local pi_pos = 1
+    _io.read_char = function()
+      if pi_pos > #pipe_input then return "\4" end
+      local ch = pipe_input:sub(pi_pos, pi_pos)
+      pi_pos = pi_pos + 1
+      return ch
+    end
+    _io.readline = function(prompt_str)
+      local nl = pipe_input:find("\n", pi_pos, true)
+      if not nl then
+        if pi_pos > #pipe_input then return nil end
+        local rest = pipe_input:sub(pi_pos)
+        pi_pos = #pipe_input + 1
+        return rest
+      end
+      local line = pipe_input:sub(pi_pos, nl - 1)
+      pi_pos = nl + 1
+      return line
+    end
+  end
+
+  -- If this is part of a pipeline or has redirection, capture output
+  local need_capture = cmd._pipe_out or redir_out_file
+  if need_capture then setup_redirect() end
+
+  local code = 0
   if builtins[name] then
-    return builtins[name](argv) or 0
+    code = builtins[name](argv) or 0
+  else
+    local path = lp.which(name, PATH_LIST)
+    if not path then
+      _io.write = old_write
+      _io.readline = old_readline
+      _io.read_char = old_read_char
+      sh_err(name .. ": command not found")
+      return 127, ""
+    end
+
+    local src, err = vfs.readfile(path)
+    if not src then
+      _io.write = old_write
+      _io.readline = old_readline
+      _io.read_char = old_read_char
+      sh_err(name .. ": " .. tostring(err))
+      return 1, ""
+    end
+
+    local fn, perr = load(src, "=" .. name, "t", _G)
+    if not fn then
+      _io.write = old_write
+      _io.readline = old_readline
+      _io.read_char = old_read_char
+      sh_err(name .. ": " .. tostring(perr))
+      return 1, ""
+    end
+
+    local old_arg = _G.arg
+    local prog_arg = {}
+    prog_arg[0] = name
+    for i = 2, #argv do prog_arg[#prog_arg + 1] = argv[i] end
+    _G.arg = prog_arg
+
+    local ok, result = xpcall(fn, function(e)
+      return debug and debug.traceback(e, 2) or e
+    end)
+
+    _G.arg = old_arg
+
+    if not ok then
+      code = 1
+      -- Restore I/O before printing error
+      if capturing then _io.write = old_write end
+      sh_err(name .. ": runtime error: " .. tostring(result))
+      if capturing then _io.write = capture_write end
+    else
+      code = type(result) == "number" and result or 0
+    end
   end
 
-  -- External command
-  local path = lp.which(name, PATH_LIST)
-  if not path then
-    sh_err(name .. ": command not found"); return 127
+  _io.readline = old_readline
+  _io.read_char = old_read_char
+
+  local output = ""
+  if need_capture then
+    output = finish_redirect()
   end
 
-  local src, err = vfs.readfile(path)
-  if not src then
-    sh_err(name .. ": " .. tostring(err)); return 1
-  end
-
-  -- Run in the same process for simplicity (full fork would need scheduler support)
-  local fn, perr = load(src, "=" .. name, "t", _G)
-  if not fn then sh_err(name .. ": " .. tostring(perr)); return 1 end
-
-  -- Set arg globals (POSIX: arg[0] = program name, arg[1..n] = real arguments)
-  local old_arg = _G.arg
-  local prog_arg = {}
-  prog_arg[0] = name
-  for i = 2, #argv do prog_arg[#prog_arg + 1] = argv[i] end
-  _G.arg = prog_arg
-
-  local ok, result = xpcall(fn, function(e)
-    return debug and debug.traceback(e, 2) or e
-  end)
-
-  _G.arg = old_arg
-
-  if not ok then
-    sh_err(name .. ": runtime error: " .. tostring(result))
-    return 1
-  end
-  return type(result) == "number" and result or 0
+  return code, output
 end
 
 local function exec_pipeline(cmds)
-  -- For now pipelines run sequentially (true IPC pipes need coroutines + buffers)
-  -- A real pipe is left as a future extension.
+  if #cmds == 1 then
+    local code, _ = exec_cmd(cmds[1])
+    _last_exit = code
+    return code
+  end
+
+  -- Multi-command pipeline: pipe stdout of each to stdin of next
+  local pipe_data = nil
   local last = 0
-  for _, cmd in ipairs(cmds) do
-    last = exec_cmd(cmd)
+  for i, cmd in ipairs(cmds) do
+    if i < #cmds then cmd._pipe_out = true end
+    local code, output = exec_cmd(cmd, pipe_data)
+    pipe_data = output
+    last = code
     _last_exit = last
   end
   return last
@@ -501,10 +672,57 @@ local function exec_groups(groups)
     if group.op == "&&" and last ~= 0 then run = false end
     if group.op == "||" and last == 0  then run = false end
     if run then
-      last = exec_pipeline(group.cmds)
+      -- Check if any cmd in pipeline has bg flag
+      local is_bg = false
+      for _, cmd in ipairs(group.cmds) do
+        if cmd.bg then is_bg = true end
+      end
+
+      if is_bg and #group.cmds == 1 then
+        -- Background job: spawn as subprocess
+        local cmd = group.cmds[1]
+        local name = cmd.argv[1]
+        if name then
+          local path = lp.which(name, PATH_LIST)
+          if path then
+            local src = vfs.readfile(path)
+            if src then
+              local spawn_ok, child_pid = pcall(function()
+                return sys("spawn", path, name)
+              end)
+              if spawn_ok and child_pid then
+                local jid = _next_job; _next_job = _next_job + 1
+                _jobs[#_jobs + 1] = { id = jid, pid = child_pid, name = table.concat(cmd.argv, " ") }
+                sh_writeln("[" .. jid .. "] " .. child_pid)
+                last = 0
+              else
+                sh_err("bg: failed to spawn " .. name)
+                last = 1
+              end
+            end
+          else
+            sh_err(name .. ": command not found"); last = 127
+          end
+        end
+      else
+        last = exec_pipeline(group.cmds)
+      end
       _last_exit = last
     end
   end
+
+  -- Reap finished background jobs
+  local new_jobs = {}
+  for _, job in ipairs(_jobs) do
+    local proc = kernel.process.get(job.pid)
+    if proc and proc.state ~= "zombie" then
+      new_jobs[#new_jobs + 1] = job
+    else
+      sh_writeln("[" .. job.id .. "]  Done       " .. job.name)
+    end
+  end
+  _jobs = new_jobs
+
   return last
 end
 
@@ -680,6 +898,17 @@ if not _io.is_pty then
 end
 _io.write("\27[1;36m" .. kernel.VERSION .. "\27[0m  |  type 'help' for builtins\n\n")
 
+-- Register SIGINT handler so shell doesn't die from Ctrl+C
+pcall(function()
+  local proc = kernel.process.get(_pid)
+  if proc then
+    proc.signal_handlers = proc.signal_handlers or {}
+    proc.signal_handlers["SIGINT"] = function()
+      -- Just interrupt, don't exit the shell
+    end
+  end
+end)
+
 while _running do
   local ok, line = pcall(readline_with_history)
   if not ok then
@@ -690,7 +919,6 @@ while _running do
   line = lc.trim(line or "")
 
   if line ~= "" then
-    -- Add to history (avoid duplicates at top)
     if _history[#_history] ~= line then
       _history[#_history + 1] = line
       if #_history > 500 then table.remove(_history, 1) end

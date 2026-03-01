@@ -517,15 +517,19 @@ end
 
 local function main()
   kbd.set_raw(true)
+  gpu_drv.set_cursor_blink(false)
+  kernel._suppress_log = true
   comp.init()
 
   local running = true
-  local frame = 0
+  local dirty = true
+  local last_draw = 0
 
   while running do
     local ev = { computer.pullSignal(0.05) }
 
     if ev[1] then
+      dirty = true
       if ev[1] == "touch" then
         local sx, sy = ev[3], ev[4]
         if not handle_taskbar_click(sx, sy) then
@@ -549,31 +553,37 @@ local function main()
     -- Poll PTY output from terminal windows
     for _, win in ipairs(comp._windows) do
       if win._poll then
-        pcall(win._poll)
+        local had = pcall(win._poll)
+        if had then dirty = true end
       end
     end
 
-    frame = frame + 1
-    if frame >= 2 then
-      frame = 0
+    local now = computer.uptime()
+    if dirty or now - last_draw > 0.25 then
       draw_desktop()
       for _, win in ipairs(comp._windows) do
         win.draw(gpu)
       end
       draw_taskbar()
       draw_launcher()
+      dirty = false
+      last_draw = now
     end
 
     coroutine.yield()
   end
 
   kbd.set_raw(false)
+  kernel._suppress_log = false
+  gpu_drv.set_cursor_blink(true)
   gpu_drv.clear()
   return 0
 end
 
 local ok, err = pcall(main)
 kbd.set_raw(false)
+kernel._suppress_log = false
+pcall(function() gpu_drv.set_cursor_blink(true) end)
 pcall(function() gpu_drv.clear() end)
 if not ok then
   pcall(function() gpu_drv.write("compositor: " .. tostring(err) .. "\n") end)

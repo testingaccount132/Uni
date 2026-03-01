@@ -70,21 +70,30 @@ function signal.dispatch(ev)
     -- Ctrl+C → SIGINT
     if char == 3 then
       if _fg_pid then signal.send(_fg_pid, "SIGINT") end
+      if kernel.drivers and kernel.drivers.keyboard then
+        kernel.drivers.keyboard.push_ctrl("C")
+      end
+    -- Ctrl+D → EOF
+    elseif char == 4 then
+      if kernel.drivers and kernel.drivers.keyboard then
+        kernel.drivers.keyboard.push_ctrl("D")
+      end
+    -- Ctrl+Z → SIGTSTP
+    elseif char == 26 then
+      if _fg_pid then signal.send(_fg_pid, "SIGTSTP") end
+      if kernel.drivers and kernel.drivers.keyboard then
+        kernel.drivers.keyboard.push_ctrl("Z")
+      end
     -- Ctrl+\ → SIGQUIT
     elseif char == 28 then
       if _fg_pid then signal.send(_fg_pid, "SIGQUIT") end
-    -- Ctrl+Z → SIGSTOP (not standard in OC but included for completeness)
-    elseif char == 26 then
-      if _fg_pid then signal.send(_fg_pid, "SIGSTOP") end
     else
-      -- Route raw key events to the keyboard driver
       if kernel.drivers and kernel.drivers.keyboard then
         kernel.drivers.keyboard.push(ev)
       end
     end
 
   elseif etype == "component_added" or etype == "component_removed" then
-    -- Hardware hotplug – handled by drivers
     if kernel.drivers then
       for _, drv in pairs(kernel.drivers) do
         if drv.hotplug then drv.hotplug(ev) end

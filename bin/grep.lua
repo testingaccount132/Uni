@@ -12,14 +12,14 @@ local count_only  = false
 local pattern     = nil
 local files       = {}
 
-local i = 2
+local i = 1
 while arg[i] do
   if arg[i] == "-i" then ignore_case = true
   elseif arg[i] == "-v" then invert = true
   elseif arg[i] == "-n" then line_nums = true
   elseif arg[i] == "-c" then count_only = true
   elseif arg[i] == "--help" then
-    print("Usage: grep [-ivcn] pattern [file...]"); return 0
+    gpu.write("Usage: grep [-ivcn] pattern [file...]\n"); return 0
   elseif not pattern then
     pattern = arg[i]
   else
@@ -28,7 +28,7 @@ while arg[i] do
   i = i + 1
 end
 
-if not pattern then print("grep: missing pattern"); return 1 end
+if not pattern then gpu.write("grep: missing pattern\n"); return 1 end
 
 local function grep_file(path, label)
   local src, err
@@ -38,7 +38,7 @@ local function grep_file(path, label)
   else
     local abs = lp.resolve(path, cwd)
     src, err = vfs.readfile(abs)
-    if not src then print("grep: " .. path .. ": " .. tostring(err)); return 0, 1 end
+    if not src then gpu.write("grep: " .. path .. ": " .. tostring(err) .. "\n"); return 0, 1 end
   end
 
   local match_count = 0
@@ -64,7 +64,7 @@ local function grep_file(path, label)
 
   if count_only then
     local prefix = label and (label .. ":") or ""
-    print(prefix .. match_count)
+    gpu.write(prefix .. match_count .. "\n")
   end
 
   return match_count, 0

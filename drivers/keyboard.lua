@@ -27,11 +27,9 @@ end
 
 --- Called by signal.dispatch for key_down events.
 function kbd.push(ev)
-  -- ev = { "key_down", screen_addr, char_code, key_code, player_name }
   local char = ev[3]
   local code = ev[4]
 
-  -- Special keys
   if KEYS[code] ~= nil then
     local mapped = KEYS[code]
     if mapped then
@@ -40,10 +38,20 @@ function kbd.push(ev)
     return
   end
 
-  -- Printable character
   if char and char > 0 and char < 256 then
     local c = string.char(char)
     _buf[#_buf + 1] = c
+  end
+end
+
+--- Push a control character from signal dispatch.
+function kbd.push_ctrl(name)
+  if name == "C" then
+    _buf[#_buf + 1] = "\3"
+  elseif name == "D" then
+    _buf[#_buf + 1] = "\4"
+  elseif name == "Z" then
+    _buf[#_buf + 1] = "\26"
   end
 end
 

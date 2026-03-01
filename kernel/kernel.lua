@@ -40,11 +40,13 @@ local LEVEL_COLORS = {
   PANIC = 0xFF0000,
 }
 
+k._suppress_log = false
+
 function k.log(level, msg)
   local ts   = computer.uptime()
   local line = string.format("[%5.2f] %-5s %s", ts, level, tostring(msg))
   _klog[#_klog + 1] = { ts = ts, level = level, msg = tostring(msg) }
-  if _println then
+  if _println and not k._suppress_log then
     _println(line, LEVEL_COLORS[level])
   end
 end
@@ -185,6 +187,10 @@ end)
 k.tmpfs = load_subsystem("tmpfs", "fs.tmpfs")
 k.vfs.mount("/tmp", k.tmpfs.new())
 
+-- 3b. procfs → /proc
+k.procfs = load_subsystem("procfs", "fs.procfs", function(m) m.init() end)
+k.vfs.mount("/proc", k.procfs)
+
 -- 4. Drivers
 k.drivers = {}
 k.drivers.gpu      = load_subsystem("driver:gpu",      "drivers.gpu",      function(m) m.init() end)
@@ -202,7 +208,20 @@ k.scheduler = load_subsystem("scheduler", "kernel.scheduler", function(m) m.init
 k.signal    = load_subsystem("signal",    "kernel.signal",    function(m) m.init() end)
 k.syscall   = load_subsystem("syscall",   "kernel.syscall",   function(m) m.init() end)
 
--- 5b. Populate os.* for compatibility (OpenOS scripts expect os.sleep etc.)
+-- 5b. Global print() wrapper (safety net for scripts using print())
+_G.print = function(...)
+  local args = {...}
+  local gpu_d = k.drivers and k.drivers.gpu
+  if gpu_d then
+    local parts = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring(args[i])
+    end
+    gpu_d.write(table.concat(parts, "\t") .. "\n")
+  end
+end
+
+-- 5c. Populate os.* for compatibility (OpenOS scripts expect os.sleep etc.)
 _G.os = _G.os or {}
 function os.sleep(n)
   computer.pullSignal(n or 0)

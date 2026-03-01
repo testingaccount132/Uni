@@ -1,8 +1,9 @@
 -- df – report filesystem disk space usage
 
-local lc = kernel.require("lib.libc")
+local gpu = kernel.drivers.gpu
+local lc  = kernel.require("lib.libc")
 
-print(string.format("\27[1m%-20s %10s %10s %10s %6s %s\27[0m",
+gpu.write(string.format("\27[1m%-20s %10s %10s %10s %6s %s\27[0m\n",
   "Filesystem", "Size", "Used", "Avail", "Use%", "Mounted on"))
 
 for mp, fs in pairs(kernel.vfs.mounts()) do
@@ -23,7 +24,7 @@ for mp, fs in pairs(kernel.vfs.mounts()) do
     avail_str = "-"
     pct = "-"
   end
-  print(string.format("%-20s %10s %10s %10s %6s %s",
+  gpu.write(string.format("%-20s %10s %10s %10s %6s %s\n",
     (fs._addr and fs._addr:sub(1,8) or "virtual"), size_str, used_str, avail_str, pct, mp))
 end
 return 0

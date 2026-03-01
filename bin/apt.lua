@@ -154,7 +154,11 @@ local function save_installed(db)
     lines[#lines + 1] = k .. " " .. db[k]
   end
   mkdirp("/var/lib/apt")
-  write_file(INSTALLED_DB, table.concat(lines, "\n") .. "\n")
+  local data = table.concat(lines, "\n") .. "\n"
+  local ok, err = write_file(INSTALLED_DB, data)
+  if not ok then
+    writeln(red("E:") .. " Failed to save installed DB: " .. tostring(err))
+  end
 end
 
 -- ── Source URLs ──────────────────────────────────────────────────────────────

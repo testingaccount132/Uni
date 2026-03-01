@@ -116,10 +116,8 @@ end
 local _ansi_buf = nil  -- buffer while inside escape sequence
 
 function gpu_drv.write(text)
-  if not _gpu then
-    -- fallback: do nothing (no GPU)
-    return
-  end
+  if not _gpu then return end
+  if _cursor_shown then gpu_drv.hide_cursor() end
   text = tostring(text)
   local i = 1
   while i <= #text do
@@ -207,22 +205,24 @@ function gpu_drv.get_cursor()
 end
 
 -- ── Cursor rendering ────────────────────────────────────────────────────────
-local _cursor_visible = true
 local _cursor_blink   = true
 local _cursor_shown   = false
+local _cursor_sx, _cursor_sy = nil, nil   -- position where cursor was drawn
 local _cursor_char    = nil
-local _cursor_fg      = nil
-local _cursor_bg      = nil
+local _cursor_cfg     = nil
+local _cursor_cbg     = nil
 
 function gpu_drv.show_cursor()
   if not _gpu or not _cursor_blink then return end
   if _cursor_shown then return end
-  -- Save what's under the cursor and draw the cursor block
-  _cursor_char = _gpu.get(_cx, _cy)
-  _cursor_fg, _cursor_bg = _fg, _bg
+  _cursor_sx, _cursor_sy = _cx, _cy
+  local ch, fg, bg = _gpu.get(_cx, _cy)
+  _cursor_char = ch or " "
+  _cursor_cfg  = fg or _fg
+  _cursor_cbg  = bg or _bg
   _gpu.setForeground(0x000000)
   _gpu.setBackground(0xFFFFFF)
-  _gpu.set(_cx, _cy, _cursor_char or " ")
+  _gpu.set(_cx, _cy, _cursor_char)
   _gpu.setForeground(_fg)
   _gpu.setBackground(_bg)
   _cursor_shown = true
@@ -230,13 +230,13 @@ end
 
 function gpu_drv.hide_cursor()
   if not _gpu or not _cursor_shown then return end
-  -- Restore what was under the cursor
-  _gpu.setForeground(_cursor_fg or _fg)
-  _gpu.setBackground(_cursor_bg or _bg)
-  _gpu.set(_cx, _cy, _cursor_char or " ")
+  _gpu.setForeground(_cursor_cfg or _fg)
+  _gpu.setBackground(_cursor_cbg or _bg)
+  _gpu.set(_cursor_sx or _cx, _cursor_sy or _cy, _cursor_char or " ")
   _gpu.setForeground(_fg)
   _gpu.setBackground(_bg)
   _cursor_shown = false
+  _cursor_sx, _cursor_sy = nil, nil
 end
 
 function gpu_drv.set_cursor_blink(enabled)
@@ -246,6 +246,7 @@ end
 
 function gpu_drv.clear()
   if not _gpu then return end
+  if _cursor_shown then _cursor_shown = false end
   _w, _h = _gpu.getResolution()
   _fg = 0xFFFFFF; _bg = 0x000000
   _gpu.setForeground(_fg)

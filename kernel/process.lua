@@ -45,6 +45,7 @@ local function new_proc(name, thread, opts)
     children  = {},
     signals   = {},
     priority  = opts.priority or 10,
+    signal_handlers = {},
     _sleep_until = nil,
   }
   -- Standard streams (3 fds: stdin=0, stdout=1, stderr=2)
