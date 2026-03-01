@@ -1,6 +1,6 @@
 # UniOS — Installation Guide
 
-> Every method of getting UniOS running, from the quickest one-liner to full manual control.
+> Every method of getting UniOS running, from the quickest one-liner to manual control.
 
 ---
 
@@ -8,10 +8,10 @@
 
 1. [Prerequisites](#1-prerequisites)
 2. [Method A — One-Line Bootstrap (Easiest)](#2-method-a--one-line-bootstrap-easiest)
-3. [Method B — Installer Disk + TUI Wizard](#3-method-b--installer-disk--tui-wizard)
-4. [Method C — From another UniOS (get --update)](#4-method-c--from-another-unios-get---update)
-5. [Flashing the EEPROM](#5-flashing-the-eeprom)
-6. [First Boot](#6-first-boot)
+3. [Method B — EEPROM Recovery (No OS needed)](#3-method-b--eeprom-recovery-no-os-needed)
+4. [Flashing the EEPROM](#4-flashing-the-eeprom)
+5. [First Boot](#5-first-boot)
+6. [Keeping UniOS Updated](#6-keeping-unios-updated)
 7. [Tools Reference](#7-tools-reference)
 8. [Post-Install Setup](#8-post-install-setup)
 9. [Troubleshooting](#9-troubleshooting)
@@ -34,7 +34,7 @@
 | GPU + Screen | Tier 2 | Tier 3 |
 | HDD | Tier 2 (1 MB) | Tier 3 (2 MB) |
 | EEPROM | 1× | 1× |
-| **Internet Card** | Required for Methods A & C | — |
+| **Internet Card** | Required | — |
 
 > **RAM note:** UniOS needs at least 1.5 MB total. Tier 1 sticks (256 KB each) are not enough.
 
@@ -58,27 +58,9 @@ That's it. The bootstrap will:
 
 1. Detect your internet card
 2. Show a disk selection menu if you have multiple writable disks
-3. Download all 50 UniOS files from GitHub with a live progress bar
+3. Download all UniOS files from GitHub with a live progress bar
 4. Write `/etc/hostname`, create `/root`, create standard dirs
 5. Flash the EEPROM automatically (if one is present)
-
-```
-╔════════════════════════════════════════════════════════════════════╗
-║            UniOS Bootstrap Installer                               ║
-║            github.com/testingaccount132/Uni                        ║
-╠════════════════════════════════════════════════════════════════════╣
-║  ·  Internet card ready                                            ║
-║  ✓  Target: My Disk (3a4f9b2c…)                                    ║
-║  ·  Downloading 50 files from GitHub…                              ║
-║  ✓  bios.lua (2847B)                                               ║
-║  ✓  init.lua (1842B)                                               ║
-║  ✓  kernel.lua (4201B)                                             ║
-║      …                                                             ║
-║  ✓  EEPROM flashed! (2847 bytes)                                   ║
-║  ✓  Installation complete!  Reboot to start UniOS.                 ║
-╠═══════════════════ ▕████████████████████▏ Done!  100% ════════════╣
-╚════════════════════════════════════════════════════════════════════╝
-```
 
 ### Step 2 — Reboot
 
@@ -90,136 +72,28 @@ UniOS boots. Done.
 
 ---
 
-## 3. Method B — Installer Disk + TUI Wizard
+## 3. Method B — EEPROM Recovery (No OS needed)
 
-Use this if you don't have an internet card, or if you're setting up multiple machines from one disk.
+If your UniOS BIOS is already flashed but boot files are missing or corrupted, the BIOS has a built-in recovery mode.
 
-### Step 1 — Prepare the installer disk
-
-Copy the full UniOS repository onto any OC floppy or HDD.
-
-**From a PC:**
-```bash
-git clone https://github.com/testingaccount132/Uni.git
-# Copy the Uni/ folder contents to an OC filesystem via mod support
-```
-
-**From an OpenOS machine with internet:**
-```sh
-wget -fq https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua /tmp/bs.lua
-lua /tmp/bs.lua
-# This installs to the current machine; that disk becomes your installer
-```
-
-### Step 2 — Flash the Installer EEPROM
-
-You need a dedicated "installer EEPROM" to make the disk bootable.
-
-From any OC terminal:
-```sh
-# Copy installer_eeprom.lua to the EEPROM
-lua /eeprom/flash.lua /installer/installer_eeprom.lua
-```
-
-Label it so you remember:
-```sh
-# OpenOS:
-component.proxy(component.list("eeprom")()).setLabel("UniOS Installer")
-```
-
-### Step 3 — Assemble the installer computer
-
-- Computer Case + CPU + RAM + GPU + Screen
-- **Installer EEPROM** (from Step 2)
-- **Installer disk** in a drive
-- **Target HDD** (empty or to-be-overwritten) in another slot
-
-### Step 4 — Power on and follow the wizard
-
-The installer EEPROM launches the TUI automatically:
+When critical files (`/boot/init.lua`, `/kernel/kernel.lua`, `/bin/sh.lua`) are missing, the BIOS automatically enters **Recovery Mode** and offers:
 
 ```
-  ◉─────●─────○─────○─────○─────○
-  Welcome  Disk  Options  Confirm  Install  Done
+RECOVERY MODE
+Missing: /boot/init.lua
+Internet found.
+[1] Bootstrap installer
+[2] Reboot
+[3] Halt
 ```
 
-**Welcome** → Press `Enter`
+Press `1` to automatically download and run the bootstrap installer from GitHub. This reinstalls all system files without needing OpenOS.
 
-**Disk selection** → Use `↑`/`↓` to pick your target HDD, `Enter` to confirm
-
-**Options:**
-
-| Setting | Key | Default |
-|---------|-----|---------|
-| Hostname | Type + `Enter` | `uni` |
-| Flash EEPROM | `←`/`→` | Yes |
-| Create /root | `←`/`→` | Yes |
-| Wipe disk first | `←`/`→` | No |
-
-**Confirm** → Press `Enter` to install, `Esc` to go back
-
-**Progress** → Watch the live log and progress bar
-
-**Done** → Press `Enter` to reboot automatically
-
-### Step 5 — Swap and reboot
-
-Remove the installer disk. The target HDD now has UniOS. Reboot.
+**Requirements:** Internet card installed, UniOS BIOS flashed on EEPROM.
 
 ---
 
-## 4. Method C — From another UniOS (`get --update`)
-
-If UniOS is already running and you want to update or clone to another disk:
-
-### Update the current installation
-
-```sh
-get --update
-```
-
-This downloads every file from GitHub and overwrites your local copy. Safe to run at any time.
-
-```
-[1/50]  ✓  bios.lua (2847B)
-[2/50]  ✓  init.lua (1842B)
-...
-✓  All 50 files updated.
-```
-
-### Check what has changed
-
-```sh
-get --check
-```
-
-```
-  =  bin/ls.lua
-  ≠  bin/grep.lua          ← this one differs from GitHub
-  =  kernel/kernel.lua
-...
-2 file(s) differ. Run 'get --update' to sync.
-```
-
-### Download a single file
-
-```sh
-get bin/ls.lua                    # fetch from repo to /bin/ls.lua
-get bin/ls.lua -o /tmp/ls_new.lua # fetch to a specific path
-```
-
-### Install to a second disk
-
-```sh
-# Mount the second disk, then clone
-get --update   # updates current root
-# Or use the TUI installer from within UniOS:
-lua /installer/install.lua
-```
-
----
-
-## 5. Flashing the EEPROM
+## 4. Flashing the EEPROM
 
 The EEPROM holds the BIOS. Without flashing it, OC boots the default Lua BIOS which doesn't know about UniOS.
 
@@ -242,7 +116,7 @@ lua /eeprom/flash.lua /eeprom/bios.lua
 4. Backs up the current EEPROM to `/eeprom.bak`
 5. Writes the new BIOS
 6. Verifies the write byte-by-byte
-7. Sets the EEPROM label to `UniOS BIOS 1.0`
+7. Sets the EEPROM label to `UniOS BIOS 1.1`
 
 **Flags:**
 
@@ -258,20 +132,22 @@ lua /eeprom/flash.lua /eeprom/bios.lua
 ```lua
 -- From an OpenOS Lua prompt:
 local e = component.proxy(component.list("eeprom")())
-local f = io.open("/eeprom/bios.lua","rb")
+local f = io.open("/eeprom/bios.min.lua","rb")
 e.set(f:read("*a")); f:close()
-e.setLabel("UniOS BIOS 1.0")
+e.setLabel("UniOS BIOS 1.1")
 print("Done.")
 ```
 
+> **Note:** Use `bios.min.lua` (3.7 KB) for EEPROM flashing — it's pre-minified and always fits within the 4 KB limit. The full `bios.lua` (9.7 KB) is the readable source but too large for EEPROM.
+
 ---
 
-## 6. First Boot
+## 5. First Boot
 
 A successful boot looks like:
 
 ```
-UniOS BIOS 1.0
+UniOS BIOS 1.1
 Scanning for boot device…
 Boot device: 3a4f9b2c…
 Loaded /boot/init.lua (1842 bytes)
@@ -281,18 +157,9 @@ Booting UniOS 1.0…
 [INFO] UniOS 1.0 (Helix) starting
 [INFO] Boot device: 3a4f9b2c
 [INFO] Loading VFS…
-[INFO] Loading devfs…
-[INFO] Loading tmpfs…
 [INFO] Loading GPU driver…
 [INFO] Loading keyboard driver…
 [INFO] Loading disk driver…   hda [3a4f9b2c] label='My Disk'
-[INFO] Loading process manager…
-[INFO] Loading scheduler…
-[INFO] Loading signal system…
-[INFO] Loading syscall table…  24 syscalls registered
-[INFO] Loading standard libraries…
-[INFO] Running /etc/rc…
-[INFO] rc: done
 [INFO] Spawning PID 1…   /bin/sh.lua
 [INFO] Kernel ready. Entering scheduler.
 
@@ -305,6 +172,35 @@ You're in. Try `uname -a` or `ls /`.
 
 ---
 
+## 6. Keeping UniOS Updated
+
+UniOS includes `apt`, a package manager that tracks file changes via the GitHub API.
+
+### Update the system
+
+```sh
+apt update         # fetch latest file manifest with hashes from GitHub
+apt upgrade        # download only changed or new files
+```
+
+### Install optional packages
+
+```sh
+apt install gui    # graphical desktop environment
+apt install bash   # advanced shell with functions and arrays
+apt install nano   # text editor (included by default)
+```
+
+### Check system status
+
+```sh
+apt status         # show tracked files, installed packages, memory
+apt list           # list all available packages
+apt search gui     # search for packages
+```
+
+---
+
 ## 7. Tools Reference
 
 ### `tools/bootstrap.lua`
@@ -313,13 +209,15 @@ Full installer. Downloads everything from GitHub. Run from OpenOS.
 lua /tmp/bs.lua   # after wget
 ```
 
-### `tools/get.lua`
-File fetcher and updater. Available as `get` from within UniOS.
+### `bin/apt.lua`
+Package manager and system updater. Available as `apt` from within UniOS.
 ```sh
-get --update              # update all files
-get --check               # see what's outdated
-get bin/ls.lua            # fetch one file
-get https://… -o /path    # download any URL
+apt update               # fetch file manifest from GitHub
+apt upgrade              # update changed files
+apt install <package>    # install a package
+apt remove <package>     # remove a package
+apt list                 # list available packages
+apt status               # system overview
 ```
 
 ### `eeprom/flash.lua`
@@ -332,12 +230,6 @@ lua /eeprom/flash.lua [bios_path] [--verify|--dump]
 Remove all UniOS system files.
 ```sh
 lua /tools/uninstall.lua
-```
-
-### `installer/install.lua`
-Full TUI installer wizard. Can be run from within UniOS or from the installer EEPROM.
-```sh
-lua /installer/install.lua
 ```
 
 ---
@@ -356,14 +248,15 @@ Takes effect on next boot.
 cat >> /root/.shrc << 'EOF'
 alias ll='ls -la'
 alias ..='cd ..'
-export EDITOR=vi
+export EDITOR=nano
 EOF
 ```
 
 ### Add a command
 ```lua
 -- /bin/hello.lua
-print("Hello, " .. (arg[2] or "world") .. "!")
+local gpu = kernel.drivers.gpu
+gpu.write("Hello, " .. (arg[1] or "world") .. "!\n")
 return 0
 ```
 ```sh
@@ -401,13 +294,14 @@ df
 ### `No bootable filesystem found`
 The BIOS can't find `/boot/init.lua` on any disk.
 - Make sure the UniOS HDD is inserted in the computer case
-- Run `get --update` from another machine then move the disk
+- If BIOS is flashed, it will enter Recovery Mode automatically
+- Run `apt upgrade` from another machine then move the disk
 
 ### Black screen after power on
 The BIOS crashed before output appeared — usually a corrupted EEPROM.
 - Put back the original OC EEPROM, boot OpenOS
 - Re-run `lua /eeprom/flash.lua --verify` to check
-- Re-flash
+- Re-flash with `lua /eeprom/flash.lua`
 
 ### Shell appears but keyboard does nothing
 - Right-click the screen to grab focus
@@ -417,9 +311,9 @@ The BIOS crashed before output appeared — usually a corrupted EEPROM.
 ### `kernel.require: module not found`
 Files are missing. Fix:
 ```sh
-# From OpenOS with internet:
-get --update
-# From another machine: copy missing files
+# From UniOS with internet:
+apt update && apt upgrade
+# From OpenOS: re-run the bootstrap
 ```
 
 ### Out of memory / crashes
@@ -434,8 +328,8 @@ Install an Internet Card (Tier 1 is sufficient) into a card slot on the computer
 
 ### `EEPROM flash failed`
 - Make sure an EEPROM is physically installed
-- Check the bios.lua is under 4096 bytes: `wc -c /eeprom/bios.lua`
-- Try the manual flash one-liner from Section 5
+- Use `bios.min.lua` — it's pre-minified to fit the 4 KB EEPROM limit
+- Try the manual flash one-liner from Section 4
 
 ---
 
@@ -465,17 +359,16 @@ print("Restored.")
 INSTALL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Easiest:   wget -fq …/tools/bootstrap.lua /tmp/bs.lua && lua /tmp/bs.lua
-Offline:   Installer disk + installer_eeprom → TUI wizard
-Update:    get --update
-Check:     get --check
+Recovery:  BIOS detects missing files → downloads bootstrap automatically
+Update:    apt update && apt upgrade
 
 KEY FILES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-eeprom/bios.lua           flash this to boot UniOS
+eeprom/bios.min.lua       flash this to boot UniOS (minified, fits 4KB)
+eeprom/bios.lua           readable BIOS source (too large for EEPROM)
 eeprom/flash.lua          EEPROM flasher TUI
 tools/bootstrap.lua       one-click internet installer
-tools/get.lua             fetch/update individual files
-installer/install.lua     full TUI installer wizard
+bin/apt.lua               package manager & system updater
 
 SHELL SHORTCUTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

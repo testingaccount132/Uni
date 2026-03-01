@@ -35,7 +35,8 @@ It ships with:
 - **Hardware drivers** for GPU (with ANSI terminal emulation), keyboard, and disk
 - A **full UNIX shell** with pipes, redirects, variables, history, tab-completion, and aliases
 - **20+ standard utilities**: ls, cat, cp, mv, rm, mkdir, grep, ps, kill, df, free, uptime, uname, wc, head, tail, touch, clear...
-- A **beautiful TUI installer** and **EEPROM flasher** with progress bars and live logs
+- A **package manager** (`apt`) with dependency resolution, system updates, and hash-based integrity checks
+- An **EEPROM flasher** and **BIOS recovery mode** that auto-downloads the bootstrap when boot files are missing
 
 ---
 
@@ -63,18 +64,14 @@ wget -fq https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/boot
 
 The bootstrap downloads every file, installs it to your disk, flashes the EEPROM — then just `reboot`.
 
-### Or use the offline TUI installer
-
-Flash `installer/installer_eeprom.min.lua` (pre-minified, always fits) onto a blank EEPROM, put the UniOS disk + target disk in the computer, and power on. A 6-screen wizard handles everything.
-
 ### Keep UniOS updated
 
 From within UniOS:
 
 ```sh
-get --update       # pull latest from GitHub
-get --check        # see what's changed
-get bin/ls.lua     # update a single file
+apt update         # fetch latest file manifest from GitHub
+apt upgrade        # download only changed/new files
+apt install gui    # install optional packages
 ```
 
 > **Full installation guide with all methods:** [INSTALL.md](INSTALL.md)
@@ -109,7 +106,6 @@ drwxr-xr-x       0  drivers
 drwxr-xr-x       0  eeprom
 drwxr-xr-x       0  etc
 drwxr-xr-x       0  fs
-drwxr-xr-x       0  installer
 drwxr-xr-x       0  kernel
 drwxr-xr-x       0  lib
 drwxr-xr-x       0  root
@@ -201,12 +197,8 @@ uni/
 │   ├── passwd                ← User database
 │   ├── rc                    ← Boot script (Lua)
 │   └── profile               ← Shell profile (sh syntax)
-├── installer/
-│   ├── install.lua           ← Full TUI installer wizard
-│   └── installer_eeprom.lua  ← Bootable installer EEPROM BIOS
 ├── tools/
 │   ├── bootstrap.lua         ← One-command internet installer (run from OpenOS)
-│   ├── get.lua               ← Fetch/update files from GitHub (run from UniOS)
 │   └── uninstall.lua         ← Remove UniOS files + restore EEPROM
 ├── INSTALL.md                ← Full installation guide
 └── README.md
@@ -327,13 +319,14 @@ Pull requests are welcome! Suggestions for new utilities, drivers, or shell feat
 
 ### Areas to contribute
 
-- [ ] `vi` / text editor
+- [x] `nano` text editor
+- [x] `/proc` filesystem
+- [x] Pipe IPC between processes
+- [x] Window manager / desktop (`apt install gui`)
 - [ ] `wget` (network / modem support)
 - [ ] `tar` / `gz` archiver
-- [ ] Pipe IPC (true kernel-buffered pipes between processes)
-- [ ] `/proc` filesystem (like Linux `/proc`)
 - [ ] Multi-user support (real uid/gid switching)
-- [ ] Window manager / desktop for Tier 3 screens
+- [ ] Networking daemon (TCP/UDP sockets)
 
 ---
 

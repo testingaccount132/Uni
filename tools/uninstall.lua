@@ -2,7 +2,7 @@
 -- Run from OpenOS (or UniOS shell) after you no longer want UniOS on the disk.
 --
 -- The file list is fetched dynamically from the GitHub API so it always matches
--- exactly what 'get --update' would have installed – no hardcoded list to forget.
+-- exactly what the bootstrap would have installed.
 -- Falls back to a built-in list if there is no internet card or the API is down.
 
 local API_TREE = "https://api.github.com/repos/testingaccount132/Uni/git/trees/main?recursive=1"
@@ -98,26 +98,29 @@ local FALLBACK_FILES = {
   "/boot/init.lua",
   "/kernel/kernel.lua","/kernel/process.lua","/kernel/scheduler.lua",
   "/kernel/signal.lua","/kernel/syscall.lua",
-  "/fs/vfs.lua","/fs/devfs.lua","/fs/tmpfs.lua",
+  "/fs/vfs.lua","/fs/devfs.lua","/fs/tmpfs.lua","/fs/procfs.lua",
   "/drivers/gpu.lua","/drivers/keyboard.lua","/drivers/disk.lua",
+  "/drivers/tty.lua","/drivers/pty.lua",
   "/lib/libc.lua","/lib/libio.lua","/lib/libpath.lua","/lib/libterm.lua","/lib/pkg.lua",
   "/bin/sh.lua","/bin/ls.lua","/bin/cat.lua","/bin/cp.lua","/bin/mv.lua","/bin/rm.lua",
   "/bin/mkdir.lua","/bin/echo.lua","/bin/pwd.lua","/bin/uname.lua","/bin/ps.lua",
   "/bin/kill.lua","/bin/grep.lua","/bin/df.lua","/bin/free.lua","/bin/uptime.lua",
   "/bin/wc.lua","/bin/head.lua","/bin/tail.lua","/bin/touch.lua","/bin/clear.lua",
   "/bin/reboot.lua","/bin/dmesg.lua","/bin/which.lua","/bin/env.lua","/bin/hostname.lua",
-  "/etc/rc","/etc/profile","/etc/passwd",
-  "/installer/install.lua","/installer/installer_eeprom.lua","/installer/installer_eeprom.min.lua",
-  "/tools/bootstrap.lua","/tools/get.lua","/tools/uninstall.lua","/tools/minify.lua",
+  "/bin/nano.lua","/bin/apt.lua",
+  "/etc/rc","/etc/profile","/etc/passwd","/etc/hostname",
+  "/etc/apt/sources.list","/var/lib/apt/installed",
+  "/tools/bootstrap.lua","/tools/uninstall.lua",
   "/sbin/init.lua",
 }
 
 -- Directories to try removing (deepest first so parents empty out)
 local DIRS = {
   "/bin","/sbin","/boot","/kernel","/fs","/drivers",
-  "/lib","/eeprom","/installer","/tools",
+  "/lib","/eeprom","/tools",
+  "/etc/apt","/etc",
   "/usr/bin","/usr/lib","/usr/share","/usr",
-  "/var/log","/var/run","/var",
+  "/var/lib/apt","/var/lib","/var/log","/var/run","/var",
   "/proc",
 }
 
