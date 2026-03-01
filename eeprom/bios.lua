@@ -96,8 +96,151 @@ end
 
 println("Boot device: " .. boot_addr:sub(1, 8) .. "...", 0x4A6070)
 
+-- ── Recovery mode ────────────────────────────────────────────────────────────
+-- If critical boot files are missing, offer to download the bootstrap installer
+
+local function try_recovery()
+  println("", 0xFF5555)
+  println("RECOVERY MODE", 0xFF5555)
+  println("Critical boot files missing!", 0xFFAA00)
+  println("", 0xBBCCDD)
+
+  -- Check for internet card
+  local inet = nil
+  for a in component.list("internet") do
+    inet = component.proxy(a); break
+  end
+
+  if not inet then
+    println("No internet card found.", 0xFF5555)
+    println("Install an internet card and reboot to recover.", 0x4A6070)
+    println("", 0x4A6070)
+    println("Alternatively, download the bootstrap on another", 0x4A6070)
+    println("computer and transfer it to this disk.", 0x4A6070)
+    while true do computer.pullSignal(1) end
+  end
+
+  println("Internet card detected.", 0x00CC66)
+  println("", 0xBBCCDD)
+  println("Options:", 0xBBCCDD)
+  println("  [1] Download & run bootstrap installer", 0x00B4FF)
+  println("  [2] Reboot", 0x4A6070)
+  println("  [3] Halt (wait for manual intervention)", 0x4A6070)
+  println("", 0xBBCCDD)
+  println("Press 1, 2, or 3...", 0xBBCCDD)
+
+  while true do
+    local ev, _, char = computer.pullSignal(0.5)
+    if ev == "key_down" then
+      if char == 49 then -- '1'
+        println("", 0x00B4FF)
+        println("Downloading bootstrap installer...", 0x00B4FF)
+
+        local BS_URL = "https://raw.githubusercontent.com/testingaccount132/Uni/main/tools/bootstrap.lua"
+        local req, re = inet.request(BS_URL)
+        if not req then
+          println("Download failed: " .. tostring(re), 0xFF5555)
+          println("Press any key to reboot.", 0x4A6070)
+          computer.pullSignal()
+          computer.shutdown(true)
+          return
+        end
+
+        -- Wait for connection
+        local deadline = computer.uptime() + 30
+        while computer.uptime() < deadline do
+          local ok, err = req.finishConnect()
+          if ok then break end
+          if ok == nil then
+            println("Connection failed: " .. tostring(err), 0xFF5555)
+            computer.pullSignal()
+            computer.shutdown(true)
+            return
+          end
+          computer.pullSignal(0.1)
+        end
+
+        local chunks = {}
+        while computer.uptime() < deadline do
+          local chunk, reason = req.read(65536)
+          if chunk then
+            chunks[#chunks + 1] = chunk
+          elseif reason then
+            println("Download error: " .. tostring(reason), 0xFF5555)
+            break
+          else
+            if #chunks > 0 then break end
+            computer.pullSignal(0.1)
+          end
+        end
+        req.close()
+        local bs_src = table.concat(chunks)
+
+        if #bs_src < 100 then
+          println("Downloaded file too small (" .. #bs_src .. "B). Aborting.", 0xFF5555)
+          computer.pullSignal()
+          computer.shutdown(true)
+          return
+        end
+
+        println("Downloaded bootstrap (" .. #bs_src .. "B)", 0x00CC66)
+        println("Launching installer...", 0x00B4FF)
+
+        -- Save to /tmp/bootstrap.lua on boot_fs first
+        if boot_fs then
+          pcall(function()
+            if not boot_fs.exists("/tmp") then boot_fs.makeDirectory("/tmp") end
+            local fh = boot_fs.open("/tmp/bootstrap.lua", "w")
+            if fh then boot_fs.write(fh, bs_src); boot_fs.close(fh) end
+          end)
+        end
+
+        -- Execute bootstrap
+        local fn, perr = load(bs_src, "=bootstrap", "t", _G)
+        if not fn then
+          println("Parse error: " .. tostring(perr), 0xFF5555)
+          computer.pullSignal()
+          computer.shutdown(true)
+          return
+        end
+
+        local ok2, run_err2 = pcall(fn)
+        if not ok2 then
+          println("Bootstrap error: " .. tostring(run_err2), 0xFF5555)
+        end
+        println("", 0xBBCCDD)
+        println("Press any key to reboot.", 0xBBCCDD)
+        computer.pullSignal()
+        computer.shutdown(true)
+        return
+
+      elseif char == 50 then -- '2'
+        computer.shutdown(true)
+        return
+      elseif char == 51 then -- '3'
+        println("Halted. Reboot manually.", 0x4A6070)
+        while true do computer.pullSignal(1) end
+      end
+    end
+  end
+end
+
 if not boot_fs.exists(BOOT_FILE) then
-  halt("Boot file not found: " .. BOOT_FILE .. "\n\nThe disk does not have UniOS installed.\nRun the installer.")
+  -- Check other critical files
+  local missing = {}
+  local critical = { "/boot/init.lua", "/kernel/kernel.lua", "/bin/sh.lua" }
+  for _, f in ipairs(critical) do
+    if not boot_fs.exists(f) then missing[#missing + 1] = f end
+  end
+
+  if #missing > 0 then
+    println("Missing files:", 0xFF5555)
+    for _, f in ipairs(missing) do
+      println("  " .. f, 0xFFAA00)
+    end
+    try_recovery()
+    return
+  end
 end
 
 -- ── Read and execute /boot/init.lua ──────────────────────────────────────────
@@ -105,12 +248,13 @@ end
 local h, err = boot_fs.open(BOOT_FILE, "r")
 if not h then halt("Cannot open " .. BOOT_FILE .. ":\n" .. tostring(err)) end
 
-local src = ""
+local chunks = {}
 repeat
   local chunk = boot_fs.read(h, math.huge)
-  if chunk then src = src .. chunk end
+  if chunk then chunks[#chunks + 1] = chunk end
 until not chunk
 boot_fs.close(h)
+local src = table.concat(chunks)
 
 println(string.format("Loaded %s (%d B)", BOOT_FILE, #src), 0x4A6070)
 

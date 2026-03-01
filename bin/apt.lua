@@ -66,6 +66,16 @@ local function http_get(url, timeout)
   local req, e = internet.request(url)
   if not req then return nil, tostring(e) end
   local deadline = computer.uptime() + (timeout or 30)
+
+  -- Wait for connection to establish
+  while computer.uptime() < deadline do
+    local ok, err = req.finishConnect()
+    if ok then break end
+    if ok == nil then req.close(); return nil, tostring(err or "connection failed") end
+    os.sleep(0.05)
+  end
+
+  -- Read response
   local chunks = {}
   while computer.uptime() < deadline do
     local chunk, reason = req.read(65536)
@@ -74,9 +84,9 @@ local function http_get(url, timeout)
     elseif reason then
       req.close(); return nil, tostring(reason)
     else
-      break
+      if #chunks > 0 then break end
+      os.sleep(0.05)
     end
-    coroutine.yield()
   end
   req.close()
   local data = table.concat(chunks)
