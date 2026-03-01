@@ -214,6 +214,7 @@ end
 
 function gpu_drv.clear()
   if not _gpu then return end
+  _w, _h = _gpu.getResolution()
   _fg = 0xFFFFFF; _bg = 0x000000
   _gpu.setForeground(_fg)
   _gpu.setBackground(_bg)

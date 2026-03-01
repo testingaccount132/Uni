@@ -343,7 +343,30 @@ end
 
 builtins["help"] = function()
   sh_writeln("\27[1;36mUniOS sh " .. VERSION .. " (" .. kernel.VERSION .. ")\27[0m")
-  sh_writeln("Builtins: " .. table.concat(lc.keys(builtins), ", "))
+  sh_writeln("")
+  sh_writeln("\27[1mBuiltins:\27[0m " .. table.concat(lc.keys(builtins), ", "))
+
+  local cmds = {}
+  for _, dir in ipairs(PATH_LIST) do
+    local ls = vfs.list(dir)
+    if ls then
+      for _, f in ipairs(ls) do
+        local name = f:gsub("%.lua$", "")
+        if not builtins[name] then
+          cmds[name] = true
+        end
+      end
+    end
+  end
+  local sorted = {}
+  for name in pairs(cmds) do sorted[#sorted + 1] = name end
+  table.sort(sorted)
+
+  if #sorted > 0 then
+    sh_writeln("\27[1mCommands:\27[0m " .. table.concat(sorted, ", "))
+  end
+  sh_writeln("")
+  sh_writeln("\27[90mUse '<cmd> --help' for command help\27[0m")
   return 0
 end
 
@@ -576,8 +599,17 @@ pcall(function()
   if rc then sh_exec_string(rc) end
 end)
 
--- Clear boot log and print banner
-gpu.clear()
+-- Clear boot log fully and print banner
+do
+  local raw = gpu.raw and gpu.raw()
+  if raw then
+    local rw, rh = raw.getResolution()
+    raw.setBackground(0x000000)
+    raw.setForeground(0xFFFFFF)
+    raw.fill(1, 1, rw, rh, " ")
+  end
+  gpu.clear()
+end
 gpu.write("\27[1;36m" .. kernel.VERSION .. "\27[0m  |  type 'help' for builtins\n\n")
 
 while _running do
