@@ -264,7 +264,7 @@ end
 
 k.info("PID 1: " .. pid1_path)
 
-k.process.spawn(pid1_src, "init", {
+local spawn_ok, spawn_err = pcall(k.process.spawn, pid1_src, "init", {
   uid  = 0, gid = 0,
   cwd  = "/root",
   env  = {
@@ -278,6 +278,9 @@ k.process.spawn(pid1_src, "init", {
     RELEASE  = k.RELEASE,
   },
 })
+if not spawn_ok then
+  k.panic("Failed to spawn PID 1: " .. tostring(spawn_err))
+end
 
 k.info(string.format("Kernel ready in %.2fs.", computer.uptime() - boot_start))
 k.scheduler.run()

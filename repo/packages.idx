@@ -1,0 +1,53 @@
+# UniOS Package Index
+# Format: @<name> <version> <description>
+#         depends: <dep1> <dep2> ...
+#         files: <path1> <path2> ...
+# Lines starting with # are comments. Blank lines separate entries.
+
+@core 1.0.0 UniOS core system (kernel, vfs, drivers)
+depends:
+files: kernel/kernel.lua kernel/process.lua kernel/scheduler.lua kernel/signal.lua kernel/syscall.lua fs/vfs.lua fs/devfs.lua fs/tmpfs.lua drivers/gpu.lua drivers/keyboard.lua drivers/disk.lua boot/init.lua
+
+@libs 1.0.0 Standard libraries (libc, libio, libpath, libterm, pkg)
+depends: core
+files: lib/libc.lua lib/libio.lua lib/libpath.lua lib/libterm.lua lib/pkg.lua
+
+@coreutils 1.0.0 Core shell utilities (ls, cat, cp, mv, rm, mkdir, etc.)
+depends: core libs
+files: bin/ls.lua bin/cat.lua bin/cp.lua bin/mv.lua bin/rm.lua bin/mkdir.lua bin/echo.lua bin/pwd.lua bin/uname.lua bin/ps.lua bin/kill.lua bin/grep.lua bin/df.lua bin/free.lua bin/uptime.lua bin/wc.lua bin/head.lua bin/tail.lua bin/touch.lua bin/clear.lua bin/reboot.lua bin/dmesg.lua bin/which.lua bin/env.lua bin/hostname.lua
+
+@sh 1.0.0 UniOS interactive shell
+depends: core libs coreutils
+files: bin/sh.lua etc/profile etc/rc
+
+@nano 1.0.0 Terminal text editor
+depends: core libs
+files: bin/nano.lua
+
+@apt 1.0.0 Package manager with dependency resolution
+depends: core libs
+files: bin/apt.lua etc/apt/sources.list
+
+@net-tools 1.0.0 Network utilities (get, wget-like downloads)
+depends: core libs
+files: tools/get.lua
+
+@installer 1.0.0 UniOS graphical installer
+depends: core libs
+files: installer/install.lua
+
+@eeprom-tools 1.0.0 EEPROM flashing and BIOS tools
+depends: core
+files: eeprom/flash.lua
+
+@system 1.0.0 Full UniOS system (meta-package)
+depends: core libs coreutils sh nano apt net-tools eeprom-tools
+files:
+
+@dev-tools 1.0.0 Developer tools (minify, bootstrap, uninstall)
+depends: core libs net-tools
+files: tools/bootstrap.lua tools/uninstall.lua
+
+@config 1.0.0 System configuration files
+depends: core
+files: etc/hostname etc/passwd etc/profile etc/rc
