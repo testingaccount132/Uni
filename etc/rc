@@ -37,7 +37,7 @@ for _, d in ipairs(dirs) do ensure_dir(d) end
 ensure_file("/etc/hostname", "uni\n")
 ensure_file("/etc/passwd",   "root:x:0:0:root:/root:/bin/sh\nnobody:x:65534:65534:nobody:/:/dev/null\n")
 ensure_file("/etc/profile",  "export PATH=/bin:/usr/bin:/tools\nexport HOME=/root\n")
-ensure_file("/root/.shrc",   "# UniOS shell rc\nalias ll='ls -la'\nalias ..='cd ..'\n")
+ensure_file("/root/.shrc",   "# UniOS shell rc\nalias ll='ls -la'\n")
 
 -- ── /proc pseudo-entries ──────────────────────────────────────────────────────
 -- Write a few static /proc files for compatibility

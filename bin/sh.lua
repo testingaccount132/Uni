@@ -287,10 +287,16 @@ builtins["alias"] = function(argv)
     for k, v in pairs(_aliases) do sh_writeln("alias " .. k .. "='" .. v .. "'") end
     return 0
   end
-  local def = argv[2]
-  local k, v = def:match("^([%w_%-]+)=(.*)$")
-  if k then _aliases[k] = v
-  else sh_err("alias: bad syntax"); return 1 end
+  -- Join all args after "alias" so quoted values with spaces work
+  local def = table.concat(argv, " ", 2)
+  -- Strip surrounding quotes from value: alias name='val' or alias name="val"
+  local k, v = def:match("^([%w_%-%.]+)=(.*)$")
+  if k then
+    v = v:match("^'(.*)'$") or v:match('^"(.*)"$') or v
+    _aliases[k] = v
+  else
+    sh_err("alias: bad syntax"); return 1
+  end
   return 0
 end
 
