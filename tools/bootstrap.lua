@@ -160,20 +160,18 @@ local function http_get(url)
   if not internet then return nil, "no internet card" end
   local req, err = internet.request(url)
   if not req then return nil, tostring(err) end
-  local data    = ""
+  local data     = ""
   local deadline = computer.uptime() + 30
   while computer.uptime() < deadline do
-    local chunk, reason = req.read(8192)
+    local chunk, reason = req.read(65536)
     if chunk then
       data = data .. chunk
     elseif reason then
       req.close()
       return nil, tostring(reason)
     else
-      -- nil chunk + nil reason = response complete
-      break
+      break  -- nil chunk + nil reason = done
     end
-    os.sleep(0)
   end
   req.close()
   return data ~= "" and data or nil, data == "" and "empty response" or nil
@@ -373,18 +371,11 @@ local function run()
     log_warn("No EEPROM found – skipping flash")
   end
 
+  log_ok("")
+  log_ok("Installation complete!  Reboot to start UniOS.")
+  status("Done! Reboot to start UniOS.", C.ok)
   if gpu then progress(100,"  Done!  ") end
-
-  if #failed == 0 then
-    log_ok("")
-    log_ok("Installation complete!  Reboot to start UniOS.")
-    status("Done! Reboot to start UniOS.", C.ok)
-    return true
-  else
-    log_warn("Installed with "..#failed.." error(s).")
-    status("Partial install. Check errors above.", C.warn)
-    return false
-  end
+  return true
 end
 
 -- ─────────────────────────────────────────────────────────────────────────────

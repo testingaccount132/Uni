@@ -42,7 +42,7 @@ local LEVEL_COLORS = {
 
 function k.log(level, msg)
   local ts   = computer.uptime()
-  local line = string.format("[%7.4f] %-5s %s", ts, level, tostring(msg))
+  local line = string.format("[%5.2f] %-5s %s", ts, level, tostring(msg))
   _klog[#_klog + 1] = { ts = ts, level = level, msg = tostring(msg) }
   if _println then
     _println(line, LEVEL_COLORS[level])
@@ -90,7 +90,7 @@ function k.panic(m)
       local start = math.max(1, #_klog - (h - row - 2))
       for i = start, #_klog do
         local e = _klog[i]
-        g.set(3, row, string.format("[%7.4f] %s", e.ts, e.msg):sub(1, w-4))
+        g.set(3, row, string.format("[%5.2f] %s", e.ts, e.msg):sub(1, w-4))
         row = row + 1
         if row >= h - 1 then break end
       end
@@ -261,5 +261,5 @@ k.process.spawn(pid1_src, "init", {
   },
 })
 
-k.info(string.format("Kernel ready in %.4fs. Entering scheduler.", computer.uptime() - boot_start))
+k.info(string.format("Kernel ready in %.2fs. Entering scheduler.", computer.uptime() - boot_start))
 k.scheduler.run()
