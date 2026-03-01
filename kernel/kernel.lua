@@ -42,10 +42,13 @@ local LEVEL_COLORS = {
 
 k._suppress_log = false
 
+local _KLOG_MAX = 256
+
 function k.log(level, msg)
   local ts   = computer.uptime()
   local line = string.format("[%5.2f] %-5s %s", ts, level, tostring(msg))
   _klog[#_klog + 1] = { ts = ts, level = level, msg = tostring(msg) }
+  if #_klog > _KLOG_MAX then table.remove(_klog, 1) end
   if _println and not k._suppress_log then
     _println(line, LEVEL_COLORS[level])
   end
@@ -120,12 +123,13 @@ function k.require(mod)
     error(string.format("require '%s': not found (%s)", mod, open_err), 2)
   end
 
-  local src = ""
+  local chunks = {}
   repeat
     local chunk = k.root_fs.read(h, math.huge)
-    if chunk then src = src .. chunk end
+    if chunk then chunks[#chunks + 1] = chunk end
   until not chunk
   k.root_fs.close(h)
+  local src = table.concat(chunks)
 
   local fn, parse_err = load(src, "=" .. mod, "t", _G)
   if not fn then
@@ -158,7 +162,6 @@ k.info(string.format("Free memory: %dK / %dK",
 -- load_subsystem: require a module, optionally call an init function.
 -- Panics with a descriptive message on any failure.
 local function load_subsystem(name, mod_path, init_fn)
-  k.info("Load " .. name)
   local ok2, result = pcall(k.require, mod_path)
   if not ok2 then
     k.panic("Failed to load " .. name .. ":\n" .. tostring(result))
@@ -169,7 +172,6 @@ local function load_subsystem(name, mod_path, init_fn)
       k.panic("Failed to init " .. name .. ":\n" .. tostring(err3))
     end
   end
-  k.info("OK   " .. name)
   return result
 end
 
@@ -224,7 +226,16 @@ end
 -- 5c. Populate os.* for compatibility (OpenOS scripts expect os.sleep etc.)
 _G.os = _G.os or {}
 function os.sleep(n)
-  computer.pullSignal(n or 0)
+  n = n or 0
+  if n <= 0 then
+    coroutine.yield()
+    return
+  end
+  local deadline = computer.uptime() + n
+  while computer.uptime() < deadline do
+    computer.pullSignal(math.min(0.05, deadline - computer.uptime()))
+    coroutine.yield()
+  end
 end
 function os.clock()
   return computer.uptime()

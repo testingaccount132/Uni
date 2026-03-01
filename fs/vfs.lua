@@ -215,13 +215,13 @@ end
 function vfs.readfile(abs_path)
   local fd, err = vfs.open(abs_path, "r")
   if not fd then return nil, err end
-  local data = ""
+  local chunks = {}
   repeat
     local chunk = vfs.read(fd, math.huge)
-    if chunk then data = data .. chunk end
+    if chunk then chunks[#chunks + 1] = chunk end
   until not chunk
   vfs.close(fd)
-  return data
+  return table.concat(chunks)
 end
 
 --- Write a string to a file (convenience).

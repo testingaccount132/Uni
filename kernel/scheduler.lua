@@ -65,24 +65,24 @@ function scheduler.run()
       end
     end
 
-    -- Cursor blink
-    if kernel.drivers and kernel.drivers.gpu then
+    -- Cursor blink (only when GPU has blink enabled)
+    local gpu_d = kernel.drivers and kernel.drivers.gpu
+    if gpu_d then
       local now = computer.uptime()
       if not _last_blink then _last_blink = now end
       if now - _last_blink > 0.5 then
         _last_blink = now
-        local gpu_d = kernel.drivers.gpu
         if _cursor_on then gpu_d.hide_cursor() else gpu_d.show_cursor() end
         _cursor_on = not _cursor_on
       end
     end
 
-    -- If nothing is runnable, wait for an event to avoid busy-loop
     if not any_runnable then
+      -- Nothing to run — block briefly to avoid busy spin
       local ev = { computer.pullSignal(0.05) }
       kernel.signal.dispatch(ev)
     else
-      -- Yield back to OC event loop briefly
+      -- Pull pending events without blocking
       local ev = { computer.pullSignal(0) }
       if ev[1] then kernel.signal.dispatch(ev) end
     end

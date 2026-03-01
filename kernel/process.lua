@@ -108,9 +108,9 @@ end
 function process.exit(pid, code)
   local proc = _procs[pid]
   if not proc then return end
-  proc.state     = "zombie"
-  proc.exit_code = code or 0
-  kernel.info("process: pid=" .. pid .. " '" .. proc.name .. "' exited(" .. (code or 0) .. ")")
+  proc.state      = "zombie"
+  proc.exit_code  = code or 0
+  proc._exit_time = computer.uptime()
   -- Re-parent children to PID 1
   for _, cpid in ipairs(proc.children) do
     local child = _procs[cpid]
@@ -168,14 +168,20 @@ function process.sleep(pid, seconds)
   proc._sleep_until = computer.uptime() + seconds
 end
 
---- Called by scheduler each tick to wake sleeping processes.
+--- Called by scheduler each tick to wake sleeping processes and reap old zombies.
 function process.tick()
   local now = computer.uptime()
+  local reap = {}
   for pid, proc in pairs(_procs) do
     if proc.state == "sleeping" and proc._sleep_until and now >= proc._sleep_until then
       proc.state       = "running"
       proc._sleep_until = nil
+    elseif proc.state == "zombie" and proc._exit_time and now - proc._exit_time > 30 then
+      reap[#reap + 1] = pid
     end
+  end
+  for _, pid in ipairs(reap) do
+    _procs[pid] = nil
   end
 end
 
