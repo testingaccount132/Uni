@@ -144,10 +144,7 @@ local function status(msg, col)
   gset(CX, PY+PH-2, msg:sub(1,CW), col or C.dim, C.panel)
 end
 
-local function sep()
-  fg(C.border); bg(C.panel)
-  gpu.set(PX, PY+PH-5, "╠"..string.rep("═",PW-2).."╣")
-end
+local function sep() end  -- no-op: single top separator is enough
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Internet / filesystem helpers
@@ -211,19 +208,25 @@ local function choose_target()
   local disks = {}
   for addr in component.list("filesystem") do
     local f     = component.proxy(addr)
-    local label = (f.getLabel and f.getLabel()) or "unlabeled"
+    local label = (f.getLabel and f.getLabel()) or ""
     local total = (f.spaceTotal and f.spaceTotal()) or 0
-    -- Only real disks: writable, not tmpfs by label, at least 1 MB
+    local lc    = label:lower()
+    -- Exclude: read-only, any tmpfs/ramdisk label, and temporary filesystems
+    -- Also exclude tiny volumes < 1 MB (real HDDs are at least 1 MB)
+    local is_temp = f.isTemporary and f.isTemporary()
     if not f.isReadOnly()
-      and not label:lower():find("tmpfs")
-      and not label:lower():find("ramdisk")
+      and not is_temp
+      and not lc:find("tmpfs")
+      and not lc:find("ramdisk")
+      and not lc:find("tmp")
       and total >= 1024 * 1024
     then
-      disks[#disks+1] = { addr=addr, fs=f, label=label, kb=math.floor(total/1024) }
+      local disp = label ~= "" and label or "unlabeled"
+      disks[#disks+1] = { addr=addr, fs=f, label=disp, kb=math.floor(total/1024) }
     end
   end
 
-  if #disks == 0 then return nil, "No suitable disk found (need ≥1 MB writable HDD/floppy)" end
+  if #disks == 0 then return nil, "No suitable disk found (need writable HDD ≥1 MB)" end
   if #disks == 1 then return disks[1] end
 
   -- Multiple disks: show a simple numbered menu

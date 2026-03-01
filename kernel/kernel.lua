@@ -262,4 +262,18 @@ k.process.spawn(pid1_src, "init", {
 })
 
 k.info(string.format("Kernel ready in %.2fs. Entering scheduler.", computer.uptime() - boot_start))
+
+-- Clear boot log from screen before handing off to PID 1
+pcall(function()
+  local g = gpu()
+  if g then
+    local w, h = g.maxResolution()
+    g.setBackground(0x000000)
+    g.setForeground(0xFFFFFF)
+    g.fill(1, 1, w, h, " ")
+    g.set(1, 1, k.VERSION .. "  |  type 'help' for builtins")
+    g.set(1, 2, "")
+  end
+end)
+
 k.scheduler.run()
