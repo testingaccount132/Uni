@@ -42,7 +42,8 @@ function gpu_drv.init()
   _gpu.setResolution(_w, _h)
   _gpu.setBackground(_bg)
   _gpu.setForeground(_fg)
-  _gpu.fill(1, 1, _w, _h, " ")
+  -- Don't clear screen — preserve the BIOS boot log already on display.
+  -- Start cursor below any existing content (row 1 = safe default).
   _cx, _cy = 1, 1
 
   -- Register as /dev/tty0

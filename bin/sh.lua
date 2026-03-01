@@ -577,21 +577,21 @@ while _running do
   end
 
   line = lc.trim(line or "")
-  if line == "" then goto continue end
 
-  -- Add to history (avoid duplicates at top)
-  if _history[#_history] ~= line then
-    _history[#_history + 1] = line
-    if #_history > 500 then table.remove(_history, 1) end
+  if line ~= "" then
+    -- Add to history (avoid duplicates at top)
+    if _history[#_history] ~= line then
+      _history[#_history + 1] = line
+      if #_history > 500 then table.remove(_history, 1) end
+    end
+
+    local ok2, err2 = pcall(function()
+      local toks   = tokenise(line)
+      local groups = parse(toks)
+      exec_groups(groups)
+    end)
+    if not ok2 then sh_err(tostring(err2)) end
   end
 
-  local ok2, err2 = pcall(function()
-    local toks   = tokenise(line)
-    local groups = parse(toks)
-    exec_groups(groups)
-  end)
-  if not ok2 then sh_err(tostring(err2)) end
-
-  ::continue::
   coroutine.yield()
 end

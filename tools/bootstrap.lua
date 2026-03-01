@@ -12,9 +12,10 @@ local computer  = computer  or require("computer")
 
 local REPO = "https://raw.githubusercontent.com/testingaccount132/Uni/main"
 
--- Hardcoded file list — no GitHub API needed, no rate-limit risk.
+-- Hardcoded file list — no GitHub API, no rate limits.
+-- Only .min.lua for EEPROM files; skip README, LICENSE, .js and other non-runtime files.
 local FILES = {
-  "eeprom/bios.lua","eeprom/bios.min.lua","eeprom/flash.lua",
+  "eeprom/bios.min.lua","eeprom/flash.lua",
   "boot/init.lua",
   "kernel/kernel.lua","kernel/process.lua","kernel/scheduler.lua",
   "kernel/signal.lua","kernel/syscall.lua",
@@ -27,10 +28,8 @@ local FILES = {
   "bin/wc.lua","bin/head.lua","bin/tail.lua","bin/touch.lua","bin/clear.lua",
   "bin/reboot.lua","bin/dmesg.lua","bin/which.lua","bin/env.lua","bin/hostname.lua",
   "etc/hostname","etc/passwd","etc/profile","etc/rc",
-  "installer/install.lua","installer/installer_eeprom.lua",
-  "installer/installer_eeprom.min.lua",
-  "tools/bootstrap.lua","tools/get.lua","tools/uninstall.lua","tools/minify.lua",
-  "scripts/minify.js",
+  "installer/install.lua","installer/installer_eeprom.min.lua",
+  "tools/bootstrap.lua","tools/get.lua","tools/uninstall.lua",
 }
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -210,30 +209,23 @@ end
 -- Disk selection
 -- ─────────────────────────────────────────────────────────────────────────────
 
-local function is_real_disk(f, label)
-  -- Exclude in-memory / virtual filesystems
-  if label:lower():find("tmpfs")  then return false end
-  if label:lower():find("tmp")    then return false end
-  if label:lower():find("ramdisk") then return false end
-  local total = (f.spaceTotal and f.spaceTotal()) or 0
-  -- Require at least 2 MB — real HDDs and floppies are larger
-  return total >= 2 * 1024 * 1024
-end
-
 local function choose_target()
   local disks = {}
   for addr in component.list("filesystem") do
-    local f = component.proxy(addr)
-    if not f.isReadOnly() then
-      local label = (f.getLabel and f.getLabel()) or "unlabeled"
-      if is_real_disk(f, label) then
-        local kb = math.floor(((f.spaceTotal and f.spaceTotal()) or 0) / 1024)
-        disks[#disks+1] = { addr=addr, fs=f, label=label, kb=kb }
-      end
+    local f     = component.proxy(addr)
+    local label = (f.getLabel and f.getLabel()) or "unlabeled"
+    local total = (f.spaceTotal and f.spaceTotal()) or 0
+    -- Only real disks: writable, not tmpfs by label, at least 1 MB
+    if not f.isReadOnly()
+      and not label:lower():find("tmpfs")
+      and not label:lower():find("ramdisk")
+      and total >= 1024 * 1024
+    then
+      disks[#disks+1] = { addr=addr, fs=f, label=label, kb=math.floor(total/1024) }
     end
   end
 
-  if #disks == 0 then return nil, "No suitable disk found (need a real HDD/floppy, ≥2 MB)" end
+  if #disks == 0 then return nil, "No suitable disk found (need ≥1 MB writable HDD/floppy)" end
   if #disks == 1 then return disks[1] end
 
   -- Multiple disks: show a simple numbered menu
