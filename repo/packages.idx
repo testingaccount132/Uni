@@ -19,6 +19,6 @@ files: bin/bash.lua
 depends:
 files: bin/nano.lua
 
-@dev-tools 1.0.0 Development utilities (get, uninstall)
+@dev-tools 1.0.0 Development utilities (bootstrap, uninstall)
 depends:
-files: tools/get.lua tools/uninstall.lua
+files: tools/uninstall.lua tools/bootstrap.lua

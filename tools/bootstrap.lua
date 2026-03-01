@@ -33,7 +33,7 @@ local FILES = {
   "etc/apt/sources.list",
   "var/lib/apt/installed",
   "installer/install.lua","installer/installer_eeprom.min.lua",
-  "tools/bootstrap.lua","tools/get.lua","tools/uninstall.lua",
+  "tools/bootstrap.lua","tools/uninstall.lua",
 }
 
 -- ─────────────────────────────────────────────────────────────────────────────
