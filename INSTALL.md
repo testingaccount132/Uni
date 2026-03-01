@@ -482,3 +482,7 @@ SHELL SHORTCUTS
 ↑/↓     history    Tab      complete    Ctrl+C   SIGINT
 Ctrl+D  logout     reboot   restart     dmesg    kernel log
 ```
+
+---
+
+<div align="center">Vibecoded with <a href="https://cursor.com">Cursor</a> AI</div>

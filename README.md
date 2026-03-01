@@ -347,6 +347,8 @@ MIT — see [LICENSE](LICENSE) for details.
 
 Made with ❤️ for the OpenComputers community
 
+Vibecoded with [Cursor](https://cursor.com) AI
+
 [⭐ Star this repo](https://github.com/testingaccount132/Uni) · [🐛 Report a bug](https://github.com/testingaccount132/Uni/issues) · [💡 Request a feature](https://github.com/testingaccount132/Uni/issues)
 
 </div>

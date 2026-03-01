@@ -7,46 +7,31 @@
 
 local component = component or require("component")
 local computer  = computer  or require("computer")
-local fs        = fs        or (pcall(require,"filesystem") and require("filesystem") or nil)
 
 -- ── URL config ────────────────────────────────────────────────────────────────
 
-local OWNER  = "testingaccount132"
-local REPON  = "Uni"
-local BRANCH = "main"
+local REPO = "https://raw.githubusercontent.com/testingaccount132/Uni/main"
 
-local REPO     = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPON .. "/" .. BRANCH
-local API_TREE = "https://api.github.com/repos/" .. OWNER .. "/" .. REPON .. "/git/trees/" .. BRANCH .. "?recursive=1"
-
--- Files to skip (docs, git files, etc.)
-local SKIP = { ["README.md"]=true, ["LICENSE"]=true, [".gitignore"]=true }
-local function should_skip(path)
-  return SKIP[path] or path:sub(1,1) == "."
-end
-
--- Parse blob paths from the GitHub tree API JSON response.
--- Scans for consecutive "path" and "type" fields within each tree entry.
--- Works without a JSON library by matching field patterns directly.
-local function parse_tree(json)
-  local files = {}
-  -- Each tree entry looks like: {"path":"...","mode":"...","type":"blob",...}
-  -- We extract path+type pairs by scanning "path":"VALUE" then nearby "type":"VALUE"
-  local pos = 1
-  while true do
-    -- Find next "path" field
-    local ps, pe, path = json:find('"path"%s*:%s*"([^"]*)"', pos)
-    if not ps then break end
-    -- Look for "type" field within the next 300 chars of this entry
-    local window = json:sub(pe + 1, pe + 300)
-    local ftype  = window:match('"type"%s*:%s*"([^"]*)"')
-    if ftype == "blob" and not should_skip(path) then
-      files[#files+1] = path
-    end
-    pos = pe + 1
-  end
-  table.sort(files)
-  return files
-end
+-- Hardcoded file list — no GitHub API needed, no rate-limit risk.
+local FILES = {
+  "eeprom/bios.lua","eeprom/bios.min.lua","eeprom/flash.lua",
+  "boot/init.lua",
+  "kernel/kernel.lua","kernel/process.lua","kernel/scheduler.lua",
+  "kernel/signal.lua","kernel/syscall.lua",
+  "fs/vfs.lua","fs/devfs.lua","fs/tmpfs.lua",
+  "drivers/gpu.lua","drivers/keyboard.lua","drivers/disk.lua",
+  "lib/libc.lua","lib/libio.lua","lib/libpath.lua","lib/libterm.lua","lib/pkg.lua",
+  "bin/sh.lua","bin/ls.lua","bin/cat.lua","bin/cp.lua","bin/mv.lua","bin/rm.lua",
+  "bin/mkdir.lua","bin/echo.lua","bin/pwd.lua","bin/uname.lua","bin/ps.lua",
+  "bin/kill.lua","bin/grep.lua","bin/df.lua","bin/free.lua","bin/uptime.lua",
+  "bin/wc.lua","bin/head.lua","bin/tail.lua","bin/touch.lua","bin/clear.lua",
+  "bin/reboot.lua","bin/dmesg.lua","bin/which.lua","bin/env.lua","bin/hostname.lua",
+  "etc/hostname","etc/passwd","etc/profile","etc/rc",
+  "installer/install.lua","installer/installer_eeprom.lua",
+  "installer/installer_eeprom.min.lua",
+  "tools/bootstrap.lua","tools/get.lua","tools/uninstall.lua","tools/minify.lua",
+  "scripts/minify.js",
+}
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Terminal helpers (works under OpenOS)
@@ -225,23 +210,30 @@ end
 -- Disk selection
 -- ─────────────────────────────────────────────────────────────────────────────
 
+local function is_real_disk(f, label)
+  -- Exclude in-memory / virtual filesystems
+  if label:lower():find("tmpfs")  then return false end
+  if label:lower():find("tmp")    then return false end
+  if label:lower():find("ramdisk") then return false end
+  local total = (f.spaceTotal and f.spaceTotal()) or 0
+  -- Require at least 2 MB — real HDDs and floppies are larger
+  return total >= 2 * 1024 * 1024
+end
+
 local function choose_target()
-  -- Collect writable filesystems, excluding tmpfs and tiny (<512 KB) volumes
   local disks = {}
   for addr in component.list("filesystem") do
     local f = component.proxy(addr)
     if not f.isReadOnly() then
       local label = (f.getLabel and f.getLabel()) or "unlabeled"
-      local total = (f.spaceTotal and f.spaceTotal()) or 0
-      local kb    = math.floor(total / 1024)
-      -- Skip in-memory / tmpfs (label "tmpfs" or capacity < 512 KB)
-      if label:lower() ~= "tmpfs" and total >= 512 * 1024 then
+      if is_real_disk(f, label) then
+        local kb = math.floor(((f.spaceTotal and f.spaceTotal()) or 0) / 1024)
         disks[#disks+1] = { addr=addr, fs=f, label=label, kb=kb }
       end
     end
   end
 
-  if #disks == 0 then return nil, "No suitable writable disk found (need ≥512 KB HDD/floppy)" end
+  if #disks == 0 then return nil, "No suitable disk found (need a real HDD/floppy, ≥2 MB)" end
   if #disks == 1 then return disks[1] end
 
   -- Multiple disks: show a simple numbered menu
@@ -295,81 +287,42 @@ local function run()
   end
   log_ok("Target: "..disk.label.." ("..disk.addr:sub(1,8).."…)")
 
-  -- Fetch file list from GitHub API
-  local FILES
-  status("Fetching file list from GitHub…", C.dim)
-  if gpu then progress(2,"  Fetching list…  ") end
-  log_info("Querying GitHub API for file list…")
-  local tree_json, tree_err = http_get(API_TREE)
-  if tree_json then
-    FILES = parse_tree(tree_json)
-    log_ok("Found "..#FILES.." files in repo")
-  else
-    log_warn("API error: "..tostring(tree_err)..". Using built-in fallback list.")
-  end
-
-  if not FILES then
-    -- Minimal fallback so the installer still works if the API is rate-limited
-    FILES = {
-      "eeprom/bios.lua","eeprom/bios.min.lua","eeprom/flash.lua","boot/init.lua",
-      "kernel/kernel.lua","kernel/process.lua","kernel/scheduler.lua",
-      "kernel/signal.lua","kernel/syscall.lua",
-      "fs/vfs.lua","fs/devfs.lua","fs/tmpfs.lua",
-      "drivers/gpu.lua","drivers/keyboard.lua","drivers/disk.lua",
-      "lib/libc.lua","lib/libio.lua","lib/libpath.lua","lib/libterm.lua","lib/pkg.lua",
-      "bin/sh.lua","bin/ls.lua","bin/cat.lua","bin/cp.lua","bin/mv.lua","bin/rm.lua",
-      "bin/mkdir.lua","bin/echo.lua","bin/pwd.lua","bin/uname.lua","bin/ps.lua",
-      "bin/kill.lua","bin/grep.lua","bin/df.lua","bin/free.lua","bin/uptime.lua",
-      "bin/wc.lua","bin/head.lua","bin/tail.lua","bin/touch.lua","bin/clear.lua",
-      "bin/reboot.lua","bin/dmesg.lua","bin/which.lua","bin/env.lua","bin/hostname.lua",
-      "etc/hostname","etc/passwd","etc/profile","etc/rc",
-      "installer/install.lua","installer/installer_eeprom.lua",
-      "installer/installer_eeprom.min.lua",
-      "tools/bootstrap.lua","tools/get.lua","tools/uninstall.lua","tools/minify.lua",
-    }
-  end
-
   local total = #FILES
   local done  = 0
-  log_info("Downloading "..total.." files from "..REPO.."…")
+  log_info("Downloading "..total.." files…")
   status("Downloading UniOS…", C.dim)
   if gpu then progress(5,"  Downloading…  ") end
 
-  local failed = {}
-
   for _, rel_path in ipairs(FILES) do
-    local url   = REPO.."/"..rel_path
+    local url        = REPO.."/"..rel_path
     local local_path = "/"..rel_path
-
-    local short = rel_path:match("[^/]+$")
+    local short      = rel_path:match("[^/]+$")
     log_info(short)
 
     local data, err = download(url, 3)
     if not data then
       log_err("FAIL: "..rel_path.." ("..tostring(err)..")")
-      failed[#failed+1] = rel_path
+      status("Error: "..tostring(err), C.err)
+      if gpu then progress(100,"  FAILED  ") end
+      return false
+    end
+
+    mkdirp(disk.fs, local_path)
+    local h = disk.fs.open(local_path, "w")
+    if h then
+      disk.fs.write(h, data)
+      disk.fs.close(h)
+      log_ok(short.." ("..#data.."B)")
     else
-      -- Write to target filesystem
-      mkdirp(disk.fs, local_path)
-      local h = disk.fs.open(local_path, "w")
-      if h then
-        disk.fs.write(h, data)
-        disk.fs.close(h)
-        log_ok(short.." ("..#data.."B)")
-      else
-        log_err("Write failed: "..local_path)
-        failed[#failed+1] = rel_path
-      end
+      log_err("Write failed: "..local_path)
+      status("Write error: "..local_path, C.err)
+      if gpu then progress(100,"  FAILED  ") end
+      return false
     end
 
     done = done + 1
-    local pct = 5 + math.floor(done/total*78)
+    local pct = 5 + math.floor(done/total*83)
     if gpu then progress(pct, string.format("  %d / %d  ", done, total)) end
-  end
-
-  if #failed > 0 then
-    log_warn(#failed.." file(s) failed to download:")
-    for _, f in ipairs(failed) do log_err("  "..f) end
   end
 
   -- Write hostname
