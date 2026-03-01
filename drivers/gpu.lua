@@ -213,7 +213,11 @@ function gpu_drv.get_cursor()
 end
 
 function gpu_drv.clear()
-  if _gpu then _gpu.fill(1, 1, _w, _h, " ") end
+  if not _gpu then return end
+  _fg = 0xFFFFFF; _bg = 0x000000
+  _gpu.setForeground(_fg)
+  _gpu.setBackground(_bg)
+  _gpu.fill(1, 1, _w, _h, " ")
   _cx, _cy = 1, 1
 end
 

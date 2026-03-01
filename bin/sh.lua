@@ -388,9 +388,12 @@ local function exec_cmd(cmd)
   local fn, perr = load(src, "=" .. name, "t", _G)
   if not fn then sh_err(name .. ": " .. tostring(perr)); return 1 end
 
-  -- Set arg globals
+  -- Set arg globals (POSIX: arg[0] = program name, arg[1..n] = real arguments)
   local old_arg = _G.arg
-  _G.arg = argv
+  local prog_arg = {}
+  prog_arg[0] = name
+  for i = 2, #argv do prog_arg[#prog_arg + 1] = argv[i] end
+  _G.arg = prog_arg
 
   local ok, result = xpcall(fn, function(e)
     return debug and debug.traceback(e, 2) or e

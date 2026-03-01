@@ -255,7 +255,6 @@ end
 -- ── Argument parsing ──────────────────────────────────────────────────────────
 
 local argv = arg or {}
-if argv[0] then table.remove(argv, 0) end   -- strip script name if present
 
 if #argv == 0 or argv[1] == "--help" or argv[1] == "-h" then
   usage(); return 0
