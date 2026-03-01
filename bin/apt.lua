@@ -352,7 +352,7 @@ local function cmd_install(names)
     writeln(red("E:") .. " No source URL configured.")
     return 1
   end
-  local file_base = base_url:gsub("/repo/?$", "")
+  local file_base = base_url:gsub("/$", "")
 
   local done = 0
   local failed = 0

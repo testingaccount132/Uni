@@ -27,12 +27,10 @@ local FILES = {
   "bin/kill.lua","bin/grep.lua","bin/df.lua","bin/free.lua","bin/uptime.lua",
   "bin/wc.lua","bin/head.lua","bin/tail.lua","bin/touch.lua","bin/clear.lua",
   "bin/reboot.lua","bin/dmesg.lua","bin/which.lua","bin/env.lua","bin/hostname.lua",
-  "bin/nano.lua","bin/apt.lua","bin/compositor.lua",
-  "lib/libgui.lua",
+  "bin/nano.lua","bin/apt.lua",
   "etc/hostname","etc/passwd","etc/profile","etc/rc",
   "etc/apt/sources.list",
   "var/lib/apt/installed",
-  "repo/packages.idx",
   "installer/install.lua","installer/installer_eeprom.min.lua",
   "tools/bootstrap.lua","tools/get.lua","tools/uninstall.lua",
 }
